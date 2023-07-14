@@ -11,7 +11,10 @@ import gl "vendor:OpenGL"
 
 Vec2 :: linalg.Vector2f32
 Vec3 :: linalg.Vector3f32
+Vec4 :: linalg.Vector4f32
 Mat3 :: linalg.Matrix3f32
+Mat3x4 :: linalg.Matrix3x4f32
+Mat4 :: linalg.Matrix4f32
 
 load_shaders :: proc(filepath: string) -> (program: u32, ok := true) {
     data, ok_file := os.read_entire_file(filepath, context.allocator)
@@ -52,14 +55,29 @@ Camera :: struct {
     camera_matrix: linalg.Matrix4f32,
 }
 
-project_point :: proc(camera: Camera, global: Vec3) -> Vec2 {
-    translated := global - camera.position
-    local := linalg.matrix3_inverse(camera.rotation) * translated
+calculate_disposition_matrix :: proc(position: Vec3, rotation: Mat3) -> Mat4 {
+    translation := linalg.MATRIX4F32_IDENTITY
+    translation[0][3] = -position.x
+    translation[1][3] = -position.y
+    translation[2][3] = -position.z
 
-    coeff := camera.viewport_distance / local.z  
-    viewport := local.xy * coeff 
-    viewport /= cast([2]f32)camera.viewport_size / 2
-    return Vec2(viewport)
+    homo_rotation := linalg.matrix4_from_matrix3(rotation)
+    homo_rotation[3][3] = 1
+    return homo_rotation * translation
+}
+
+calculate_projection_matrix :: proc(using camera: ^Camera) {
+    projection_matrix = {}
+    projection_matrix[0][0] = viewport_distance / viewport_size.x
+    projection_matrix[1][1] = viewport_distance / viewport_size.y
+    projection_matrix[2][2] = 1
+}
+
+project_point :: proc(camera: Camera, global: Vec3) -> Vec2 {
+    global := Vec4{global.x, global.y, global.z, 1} 
+    local := camera.camera_matrix * global
+    viewport := cast(Vec3)(camera.projection_matrix * local)
+    return viewport.xy / viewport.z
 }
 
 project_points :: proc(camera: Camera, points: []Vec3) -> (data: [dynamic]f32) {
@@ -69,6 +87,16 @@ project_points :: proc(camera: Camera, points: []Vec3) -> (data: [dynamic]f32) {
         append(&data, ..projected[:])
     }
     return
+}
+
+Model :: struct {
+    vertices: []Vec3,
+}
+
+Instance :: struct {
+    using model: Model,
+    position: Vec3,
+    rotation: Mat3,
 }
 
 main :: proc() {
@@ -97,6 +125,11 @@ main :: proc() {
         position = Vec3{},
         rotation = linalg.MATRIX3F32_IDENTITY,
     }
+    calculate_projection_matrix(&camera)
+    {
+        using camera
+        camera_matrix = calculate_disposition_matrix(-position, rotation)
+    }
 
     vertices := []Vec3{
         Vec3{0, 0.5, 2},
@@ -122,7 +155,6 @@ main :: proc() {
 
         data := project_points(camera, vertices)
         defer delete(data)
-        fmt.println(data)
         ptr, _ := mem.slice_to_components(data[:])
         gl.BufferData(gl.ARRAY_BUFFER, 2 * size_of(f32) * len(vertices), ptr, gl.DYNAMIC_DRAW)
         gl.DrawArrays(gl.TRIANGLES, 0, 6)
@@ -134,12 +166,10 @@ main :: proc() {
             fmt.println("Turned!")
         }
         camera.rotation = linalg.matrix3_from_euler_angle_y(angle)
-        /*
-        camera.position.y += increment
-        if abs(camera.position.y) > 1 {
-            increment *= -1
+        {
+            using camera
+            camera_matrix = calculate_disposition_matrix(-position, rotation)
         }
-        */
         
         glfw.PollEvents()
     }
