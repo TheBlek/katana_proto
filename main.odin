@@ -56,20 +56,21 @@ Camera :: struct {
 }
 
 calculate_disposition_matrix :: proc(position: Vec3, rotation: Mat3) -> Mat4 {
-    translation := linalg.MATRIX4F32_IDENTITY
-    translation[0][3] = -position.x
-    translation[1][3] = -position.y
-    translation[2][3] = -position.z
+    using linalg
+    translation := MATRIX4F32_IDENTITY
+    translation[0][3] = position.x
+    translation[1][3] = position.y
+    translation[2][3] = position.z
 
-    homo_rotation := linalg.matrix4_from_matrix3(rotation)
+    homo_rotation := matrix4_from_matrix3(matrix3_inverse(rotation))
     homo_rotation[3][3] = 1
     return homo_rotation * translation
 }
 
 calculate_projection_matrix :: proc(using camera: ^Camera) {
     projection_matrix = {}
-    projection_matrix[0][0] = viewport_distance / viewport_size.x
-    projection_matrix[1][1] = viewport_distance / viewport_size.y
+    projection_matrix[0][0] = viewport_distance / (viewport_size.x / 2)
+    projection_matrix[1][1] = viewport_distance / (viewport_size.y / 2)
     projection_matrix[2][2] = 1
 }
 
@@ -128,7 +129,7 @@ main :: proc() {
     calculate_projection_matrix(&camera)
     {
         using camera
-        camera_matrix = calculate_disposition_matrix(-position, rotation)
+        camera_matrix = calculate_disposition_matrix(position, rotation)
     }
 
     vertices := []Vec3{
@@ -168,7 +169,7 @@ main :: proc() {
         camera.rotation = linalg.matrix3_from_euler_angle_y(angle)
         {
             using camera
-            camera_matrix = calculate_disposition_matrix(-position, rotation)
+            camera_matrix = calculate_disposition_matrix(position, rotation)
         }
         
         glfw.PollEvents()
