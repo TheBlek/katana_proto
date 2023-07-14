@@ -45,17 +45,21 @@ load_shaders :: proc(filepath: string) -> (program: u32, ok := true) {
 
 Camera :: struct {
     viewport_distance: f32,
-    viewport_size: [2]f32,
+    viewport_size: Vec2,
     position: Vec3,
     rotation: Mat3,
+    projection_matrix: linalg.Matrix3x4f32,
+    camera_matrix: linalg.Matrix4f32,
 }
 
 project_point :: proc(camera: Camera, global: Vec3) -> Vec2 {
-    coeff := camera.viewport_distance / global.z  
     translated := global - camera.position
     local := linalg.matrix3_inverse(camera.rotation) * translated
+
+    coeff := camera.viewport_distance / local.z  
     viewport := local.xy * coeff 
-    viewport /= camera.viewport_size / 2
+    fmt.println(coeff)
+    //viewport /= cast([2]f32)camera.viewport_size / 2
     return Vec2(viewport)
 }
 
@@ -89,10 +93,10 @@ main :: proc() {
     gl.load_up_to(4, 6, glfw.gl_set_proc_address)
 
     camera := Camera{
-        viewport_distance=1,
-        viewport_size={2, 2},
-        position=Vec3{},
-        rotation=linalg.MATRIX3F32_IDENTITY,
+        viewport_distance = 1,
+        viewport_size = {2, 2},
+        position = Vec3{},
+        rotation = linalg.MATRIX3F32_IDENTITY,
     }
 
     vertices := []Vec3{
@@ -118,13 +122,15 @@ main :: proc() {
         gl.Clear(gl.COLOR_BUFFER_BIT)
 
         data := project_points(camera, vertices)
+        defer delete(data)
+        fmt.println(data)
         ptr, _ := mem.slice_to_components(data[:])
         gl.BufferData(gl.ARRAY_BUFFER, 2 * size_of(f32) * len(vertices), ptr, gl.DYNAMIC_DRAW)
         gl.DrawArrays(gl.TRIANGLES, 0, 6)
         glfw.SwapBuffers(window)
 
         angle += increment
-        if abs(angle) > math.PI/2 {
+        if abs(angle) > math.PI/2 - 0.01 {
             increment *= -1
             fmt.println("Turned!")
         }
@@ -137,6 +143,5 @@ main :: proc() {
         */
         
         glfw.PollEvents()
-        delete(data)
     }
 }
