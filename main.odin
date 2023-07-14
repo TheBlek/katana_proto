@@ -58,8 +58,7 @@ project_point :: proc(camera: Camera, global: Vec3) -> Vec2 {
 
     coeff := camera.viewport_distance / local.z  
     viewport := local.xy * coeff 
-    fmt.println(coeff)
-    //viewport /= cast([2]f32)camera.viewport_size / 2
+    viewport /= cast([2]f32)camera.viewport_size / 2
     return Vec2(viewport)
 }
 
