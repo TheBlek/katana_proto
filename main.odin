@@ -46,23 +46,32 @@ load_shaders :: proc(filepath: string) -> (program: u32, ok := true) {
     return gl.load_shaders_source(vs_source, fs_source)
 }
 
+Transform :: struct {
+    position: Vec3,
+    rotation: Mat3,
+}
+
 Camera :: struct {
     viewport_distance: f32,
     viewport_size: Vec2,
-    position: Vec3,
-    rotation: Mat3,
+    transform: Transform,
     projection_matrix: linalg.Matrix3x4f32,
     camera_matrix: linalg.Matrix4f32,
 }
 
-calculate_disposition_matrix :: proc(position: Vec3, rotation: Mat3) -> Mat4 {
+inverse_disposition_matrix :: proc(using transform: Transform) -> Mat4 {
+    using linalg
+    return disposition_matrix(Transform{-position, matrix3_inverse(rotation)})
+}
+
+disposition_matrix :: proc(using transform: Transform) -> Mat4 {
     using linalg
     translation := MATRIX4F32_IDENTITY
-    translation[0][3] = position.x
-    translation[1][3] = position.y
-    translation[2][3] = position.z
+    translation[3][0] = position.x
+    translation[3][1] = position.y
+    translation[3][2] = position.z
 
-    homo_rotation := matrix4_from_matrix3(matrix3_inverse(rotation))
+    homo_rotation := matrix4_from_matrix3(rotation)
     homo_rotation[3][3] = 1
     return homo_rotation * translation
 }
@@ -74,20 +83,24 @@ calculate_projection_matrix :: proc(using camera: ^Camera) {
     projection_matrix[2][2] = 1
 }
 
-project_point :: proc(camera: Camera, global: Vec3) -> Vec2 {
-    global := Vec4{global.x, global.y, global.z, 1} 
-    local := camera.camera_matrix * global
-    viewport := cast(Vec3)(camera.projection_matrix * local)
-    return viewport.xy / viewport.z
-}
-
-project_points :: proc(camera: Camera, points: []Vec3) -> (data: [dynamic]f32) {
-    reserve(&data, len(points) * 2)
-    for point in points {
-        projected := project_point(camera, point)
+instance_project :: proc(using camera: Camera, instance: Instance) -> (data: [dynamic]f32) {
+    reserve(&data, 2*len(instance.vertices))
+    for vertex in instance.vertices {
+        global := Vec4{vertex.x, vertex.y, vertex.z, 1}
+        viewport := cast(Vec3)(projection_matrix * camera_matrix * instance.model_matrix * global)
+        projected := viewport.xy / viewport.z
         append(&data, ..projected[:])
     }
     return
+}
+
+instance_render :: proc(camera: Camera, instance: Instance) {
+    data := instance_project(camera, instance)
+    defer delete(data)
+    ptr, _ := mem.slice_to_components(data[:])
+    gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE)
+    gl.BufferData(gl.ARRAY_BUFFER, 2 * size_of(f32) * len(instance.vertices), ptr, gl.DYNAMIC_DRAW)
+    gl.DrawArrays(gl.TRIANGLES, 0, cast(i32) len(instance.vertices))
 }
 
 Model :: struct {
@@ -96,8 +109,8 @@ Model :: struct {
 
 Instance :: struct {
     using model: Model,
-    position: Vec3,
-    rotation: Mat3,
+    transform: Transform,
+    model_matrix: Mat4,
 }
 
 main :: proc() {
@@ -120,23 +133,45 @@ main :: proc() {
 
     gl.load_up_to(4, 6, glfw.gl_set_proc_address)
 
-    camera := Camera{
+    camera := Camera {
         viewport_distance = 1,
         viewport_size = {2, 2},
-        position = Vec3{},
-        rotation = linalg.MATRIX3F32_IDENTITY,
+        transform = Transform {
+            rotation = linalg.MATRIX3F32_IDENTITY,
+        },
     }
     calculate_projection_matrix(&camera)
-    {
-        using camera
-        camera_matrix = calculate_disposition_matrix(position, rotation)
-    }
+    camera.camera_matrix = inverse_disposition_matrix(camera.transform)
 
     vertices := []Vec3{
         Vec3{0, 0.5, 2},
         Vec3{0.5, -0.5, 2},
         Vec3{-0.5, -0.5, 3},
     }
+
+    model := Model {
+        vertices = vertices,
+    }
+    instance1 := Instance {
+        model = model,
+        transform = Transform {
+            rotation = linalg.MATRIX3F32_IDENTITY,
+        },
+    }
+    instance1.model_matrix = disposition_matrix(instance1.transform)
+    instance2 := Instance {
+        model = model,
+        transform = Transform {
+            position = Vec3{1, 0, 0},
+            rotation = linalg.MATRIX3F32_IDENTITY,
+        },
+    }
+    instance2.model_matrix = disposition_matrix(instance2.transform)
+    fmt.println(instance1)
+    fmt.println(instance2)
+    vertex := Vec4{vertices[0].x, vertices[0].y, vertices[0].z, 1}
+    fmt.println(instance1.model_matrix * vertex)
+    fmt.println(instance2.model_matrix * vertex)
 
     program, ok := load_shaders("plain.shader")
     assert(ok, "Shader error. Aborting") 
@@ -153,12 +188,8 @@ main :: proc() {
     angle: f32 = 0
     for !glfw.WindowShouldClose(window) { // Render
         gl.Clear(gl.COLOR_BUFFER_BIT)
-
-        data := project_points(camera, vertices)
-        defer delete(data)
-        ptr, _ := mem.slice_to_components(data[:])
-        gl.BufferData(gl.ARRAY_BUFFER, 2 * size_of(f32) * len(vertices), ptr, gl.DYNAMIC_DRAW)
-        gl.DrawArrays(gl.TRIANGLES, 0, 6)
+        instance_render(camera, instance1)
+        instance_render(camera, instance2)
         glfw.SwapBuffers(window)
 
         angle += increment
@@ -166,11 +197,8 @@ main :: proc() {
             increment *= -1
             fmt.println("Turned!")
         }
-        camera.rotation = linalg.matrix3_from_euler_angle_y(angle)
-        {
-            using camera
-            camera_matrix = calculate_disposition_matrix(position, rotation)
-        }
+        camera.transform.rotation = linalg.matrix3_from_euler_angle_y(angle)
+        camera.camera_matrix = inverse_disposition_matrix(camera.transform)
         
         glfw.PollEvents()
     }
