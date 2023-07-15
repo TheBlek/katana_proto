@@ -167,11 +167,6 @@ main :: proc() {
         },
     }
     instance2.model_matrix = disposition_matrix(instance2.transform)
-    fmt.println(instance1)
-    fmt.println(instance2)
-    vertex := Vec4{vertices[0].x, vertices[0].y, vertices[0].z, 1}
-    fmt.println(instance1.model_matrix * vertex)
-    fmt.println(instance2.model_matrix * vertex)
 
     program, ok := load_shaders("plain.shader")
     assert(ok, "Shader error. Aborting") 
