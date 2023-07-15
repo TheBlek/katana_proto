@@ -24,8 +24,6 @@ load_shaders :: proc(filepath: string) -> (program: u32, ok := true) {
     }
     defer delete(data, context.allocator)
 
-    shader := -1 // 0 - vertex shader, 1 - fragment shader
-
     text := string(data)
     blobs := strings.split(text, "#shader ")
     if len(blobs) != 3 {
@@ -97,14 +95,17 @@ instance_project :: proc(using camera: Camera, instance: Instance) -> (data: [dy
 instance_render :: proc(camera: Camera, instance: Instance) {
     data := instance_project(camera, instance)
     defer delete(data)
-    ptr, _ := mem.slice_to_components(data[:])
+    verts, _ := mem.slice_to_components(data[:])
+    ids, _ := mem.slice_to_components(instance.indices[:])
     gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE)
-    gl.BufferData(gl.ARRAY_BUFFER, 2 * size_of(f32) * len(instance.vertices), ptr, gl.DYNAMIC_DRAW)
-    gl.DrawArrays(gl.TRIANGLES, 0, cast(i32) len(instance.vertices))
+    gl.BufferData(gl.ARRAY_BUFFER, 2 * size_of(f32) * len(instance.vertices), verts, gl.DYNAMIC_DRAW)
+    gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, size_of(u32) * len(instance.indices), ids, gl.DYNAMIC_DRAW)
+    gl.DrawElements(gl.TRIANGLES, cast(i32) len(instance.indices), gl.UNSIGNED_INT, nil)
 }
 
 Model :: struct {
     vertices: []Vec3,
+    indices: []u32,
 }
 
 Instance :: struct {
@@ -143,14 +144,17 @@ main :: proc() {
     calculate_projection_matrix(&camera)
     camera.camera_matrix = inverse_disposition_matrix(camera.transform)
 
-    vertices := []Vec3{
-        Vec3{0, 0.5, 2},
+    vertices := []Vec3 {
+        Vec3{-0.5, 0.5, 2},
+        Vec3{0.5, 0.5, 2},
         Vec3{0.5, -0.5, 2},
-        Vec3{-0.5, -0.5, 3},
+        Vec3{-0.5, -0.5, 2},
     }
+    indices := []u32{0, 1, 3, 1, 2, 3}
 
     model := Model {
         vertices = vertices,
+        indices = indices,
     }
     instance1 := Instance {
         model = model,
@@ -172,17 +176,27 @@ main :: proc() {
     assert(ok, "Shader error. Aborting") 
     gl.UseProgram(program)
 
-    vertex_buffer: u32
-    gl.GenBuffers(1, &vertex_buffer)
-    gl.BindBuffer(gl.ARRAY_BUFFER, vertex_buffer)
+    vertex_array_obj: u32
+    gl.GenVertexArrays(1, &vertex_array_obj)
+    gl.BindVertexArray(vertex_array_obj)
 
-    gl.EnableVertexAttribArray(0)
+    vertex_buffer_obj: u32
+    gl.GenBuffers(1, &vertex_buffer_obj)
+    gl.BindBuffer(gl.ARRAY_BUFFER, vertex_buffer_obj)
+
+    element_buffer_obj: u32
+    gl.GenBuffers(1, &element_buffer_obj)
+    gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, element_buffer_obj)
+
     gl.VertexAttribPointer(0, 2, gl.FLOAT, gl.FALSE, 2 * size_of(f32), 0)
+    gl.EnableVertexAttribArray(0)
+    gl.BindVertexArray(0) // Unbind effectively
 
     increment: f32 = 0.01
     angle: f32 = 0
     for !glfw.WindowShouldClose(window) { // Render
         gl.Clear(gl.COLOR_BUFFER_BIT)
+        gl.BindVertexArray(vertex_array_obj)
         instance_render(camera, instance1)
         instance_render(camera, instance2)
         glfw.SwapBuffers(window)
