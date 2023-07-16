@@ -59,21 +59,13 @@ Camera :: struct {
     camera_matrix: linalg.Matrix4f32,
 }
 
-inverse_disposition_matrix :: proc(using transform: Transform) -> Mat4 {
-    using linalg
-    return disposition_matrix(Transform{-position, matrix3_inverse(rotation)})
-}
-
-disposition_matrix :: proc(using transform: Transform) -> Mat4 {
+disposition_matrix :: proc(position: Vec3) -> Mat4 {
     using linalg
     translation := MATRIX4F32_IDENTITY
     translation[3][0] = position.x
     translation[3][1] = position.y
     translation[3][2] = position.z
-
-    homo_rotation := matrix4_from_matrix3(rotation)
-    homo_rotation[3][3] = 1
-    return homo_rotation * translation
+    return translation
 }
 
 // left, right, bottom, top, near, far
@@ -192,14 +184,19 @@ main :: proc() {
         near = 0.1,
         far = 5,
     }
-    camera.projection_matrix = calculate_projection_matrix(camera.viewport_size.x, camera.viewport_size.y, camera.near, camera.far)
-    camera.camera_matrix = inverse_disposition_matrix(camera.transform)
+    {
+        using camera
+        projection_matrix = calculate_projection_matrix(viewport_size.x, viewport_size.y, near, far)
+        homo_rotation := linalg.matrix4_from_matrix3(transform.rotation)
+        homo_rotation[3][3] = 1
+        camera_matrix = linalg.matrix4_inverse(homo_rotation) * disposition_matrix(-transform.position) 
+    }
 
     vertices := []Vec3 {
-        Vec3{-0.5, 0.5, -2},
-        Vec3{0.5, 0.5, -2},
-        Vec3{0.5, -0.5, -2},
-        Vec3{-0.5, -0.5, -2},
+        Vec3{-0.5, 0.5, 0},
+        Vec3{0.5, 0.5, 0},
+        Vec3{0.5, -0.5, 0},
+        Vec3{-0.5, -0.5, 0},
     }
     indices := []u32{0, 1, 3, 1, 2, 3}
 
@@ -210,18 +207,24 @@ main :: proc() {
     instance1 := Instance {
         model = model,
         transform = Transform {
+            position = Vec3{0, 0, -2},
             rotation = linalg.MATRIX3F32_IDENTITY,
         },
     }
-    instance1.model_matrix = disposition_matrix(instance1.transform)
-    instance2 := Instance {
-        model = model,
-        transform = Transform {
-            position = Vec3{1, 0, 0},
-            rotation = linalg.MATRIX3F32_IDENTITY,
-        },
+    {
+        using instance1
+        homo_rotation := linalg.matrix4_from_matrix3(transform.rotation)
+        homo_rotation[3][3] = 1
+        model_matrix = disposition_matrix(transform.position) * homo_rotation
     }
-    instance2.model_matrix = disposition_matrix(instance2.transform)
+    // instance2 := Instance {
+    //     model = model,
+    //     transform = Transform {
+    //         position = Vec3{1, 0, 0},
+    //         rotation = linalg.MATRIX3F32_IDENTITY,
+    //     },
+    // }
+    // instance2.model_matrix = disposition_matrix(instance2.transform)
 
     program, ok := load_shaders("plain.shader")
     assert(ok, "Shader error. Aborting") 
@@ -257,8 +260,23 @@ main :: proc() {
             increment *= -1
             fmt.println("Turned!")
         }
-        camera.transform.rotation = linalg.matrix3_from_euler_angle_y(angle)
-        camera.camera_matrix = inverse_disposition_matrix(camera.transform)
+        {
+            using instance1
+            transform.rotation = linalg.matrix3_from_euler_angle_y(angle)
+
+            homo_rotation := linalg.matrix4_from_matrix3(transform.rotation)
+            homo_rotation[3][3] = 1
+
+            model_matrix = homo_rotation * disposition_matrix(transform.position)
+            fmt.println(model_matrix)
+            model_matrix = disposition_matrix(transform.position) * homo_rotation
+            fmt.println(model_matrix)
+            fmt.println()
+
+            fmt.println(homo_rotation)
+            fmt.println(transform.position)
+            fmt.println()
+        }
         
         glfw.PollEvents()
     }
