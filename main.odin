@@ -52,8 +52,10 @@ Transform :: struct {
 Camera :: struct {
     viewport_distance: f32,
     viewport_size: Vec2,
+    near: f32,
+    far: f32,
     transform: Transform,
-    projection_matrix: linalg.Matrix3x4f32,
+    projection_matrix: linalg.Matrix4f32,
     camera_matrix: linalg.Matrix4f32,
 }
 
@@ -74,11 +76,25 @@ disposition_matrix :: proc(using transform: Transform) -> Mat4 {
     return homo_rotation * translation
 }
 
-calculate_projection_matrix :: proc(using camera: ^Camera) {
-    projection_matrix = {}
-    projection_matrix[0][0] = viewport_distance / (viewport_size.x / 2)
-    projection_matrix[1][1] = viewport_distance / (viewport_size.y / 2)
-    projection_matrix[2][2] = 1
+// left, right, bottom, top, near, far
+calculate_projection_matrix_full :: proc(l, r, b, t, n, f: f32) -> (projection_matrix: Mat4) {
+    projection_matrix = {
+        2 * n / (r - l),    0,                  (r + l) / (r - l),  0,
+        0,                  2 * n / (t - b),    (t + b) / (t - b),  0,
+        0,                  0,                  -(f + n) / (f - n), -2 * f * n / (f - n),
+        0,                  0,                  -1,                 0,
+    }
+    return
+}
+
+calculate_projection_matrix :: proc(width, height, near, far: f32) -> (projection_matrix: Mat4) {
+    projection_matrix = {
+        2 * near / width,   0,                  0,                              0,
+        0,                  2 * near / height,  0,                              0,
+        0,                  0,                  -(far + near) / (far - near),   -2 * far * near / (far - near),
+        0,                  0,                  -1,                             0,
+    }
+    return
 }
 
 instance_project :: proc(using camera: Camera, instance: Instance) -> (data: [dynamic]f32) {
@@ -117,26 +133,23 @@ instance_render :: proc(camera: Camera, instance: Instance, shader: u32) {
     //     raw_data(view_flat[:]),
     // )
 
-    // projection_location := gl.GetUniformLocation(shader, "projection")
-    // projection_flat := matrix_flatten(camera.projection_matrix)
-    // gl.UniformMatrix4fv(
-    //     projection_location,
-    //     1,
-    //     gl.FALSE,
-    //     raw_data(projection_flat[:]),
-    // )
+    projection_location := gl.GetUniformLocation(shader, "projection")
+    projection_flat := matrix_flatten(camera.projection_matrix)
+    gl.UniformMatrix4fv(
+        projection_location,
+        1,
+        gl.FALSE,
+        raw_data(projection_flat[:]),
+    )
+    vertex := Vec4{instance.vertices[0].x, instance.vertices[1].y, instance.vertices[2].z, 1}
 
-    ptr, _ := mem.slice_to_components(data[:])
-    ids, _ := mem.slice_to_components(instance.indices[:])
-
-    gl.BufferData(gl.ARRAY_BUFFER, size_of(f32) * len(data), ptr, gl.DYNAMIC_DRAW)
+    gl.BufferData(gl.ARRAY_BUFFER, size_of(f32) * len(data), raw_data(data[:]), gl.DYNAMIC_DRAW)
     gl.BufferData(
         gl.ELEMENT_ARRAY_BUFFER,
         size_of(u32) * len(instance.indices),
-        ids,
+        raw_data(instance.indices[:]),
         gl.DYNAMIC_DRAW,
     )
-    fmt.println(data)
     gl.DrawElements(gl.TRIANGLES, cast(i32) len(instance.indices), gl.UNSIGNED_INT, nil)
 }
 
@@ -177,15 +190,17 @@ main :: proc() {
         transform = Transform {
             rotation = linalg.MATRIX3F32_IDENTITY,
         },
+        near = 0.1,
+        far = 5,
     }
-    calculate_projection_matrix(&camera)
+    camera.projection_matrix = calculate_projection_matrix(camera.viewport_size.x, camera.viewport_size.y, camera.near, camera.far)
     camera.camera_matrix = inverse_disposition_matrix(camera.transform)
 
     vertices := []Vec3 {
-        Vec3{-0.5, 0.5, 2},
-        Vec3{0.5, 0.5, 2},
-        Vec3{0.5, -0.5, 2},
-        Vec3{-0.5, -0.5, 2},
+        Vec3{-0.5, 0.5, -2},
+        Vec3{0.5, 0.5, -2},
+        Vec3{0.5, -0.5, -2},
+        Vec3{-0.5, -0.5, -2},
     }
     indices := []u32{0, 1, 3, 1, 2, 3}
 
