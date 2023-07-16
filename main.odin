@@ -82,24 +82,61 @@ calculate_projection_matrix :: proc(using camera: ^Camera) {
 }
 
 instance_project :: proc(using camera: Camera, instance: Instance) -> (data: [dynamic]f32) {
-    reserve(&data, 2*len(instance.vertices))
+    reserve(&data, 3*len(instance.vertices))
     for vertex in instance.vertices {
-        global := Vec4{vertex.x, vertex.y, vertex.z, 1}
-        viewport := cast(Vec3)(projection_matrix * camera_matrix * instance.model_matrix * global)
-        projected := viewport.xy / viewport.z
-        append(&data, ..projected[:])
+        global := []f32{vertex.x, vertex.y, vertex.z}
+        // global := Vec4{vertex.x, vertex.y, vertex.z, 1}
+        // viewport := cast(Vec3)(projection_matrix * camera_matrix * instance.model_matrix * global)
+        // projected := viewport.xy / viewport.z
+        append(&data, ..global)
     }
     return
 }
 
-instance_render :: proc(camera: Camera, instance: Instance) {
+instance_render :: proc(camera: Camera, instance: Instance, shader: u32) {
     data := instance_project(camera, instance)
     defer delete(data)
-    verts, _ := mem.slice_to_components(data[:])
-    ids, _ := mem.slice_to_components(instance.indices[:])
+
     gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE)
-    gl.BufferData(gl.ARRAY_BUFFER, 2 * size_of(f32) * len(instance.vertices), verts, gl.DYNAMIC_DRAW)
-    gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, size_of(u32) * len(instance.indices), ids, gl.DYNAMIC_DRAW)
+
+    // model_location := gl.GetUniformLocation(shader, "model")
+    // model_flat := matrix_flatten(instance.model_matrix)
+    // gl.UniformMatrix4fv(
+    //     model_location,
+    //     1,
+    //     gl.FALSE,
+    //     raw_data(model_flat[:]),
+    // )
+
+    // view_location := gl.GetUniformLocation(shader, "view")
+    // view_flat := matrix_flatten(camera.camera_matrix)
+    // gl.UniformMatrix4fv(
+    //     view_location,
+    //     1,
+    //     gl.FALSE,
+    //     raw_data(view_flat[:]),
+    // )
+
+    // projection_location := gl.GetUniformLocation(shader, "projection")
+    // projection_flat := matrix_flatten(camera.projection_matrix)
+    // gl.UniformMatrix4fv(
+    //     projection_location,
+    //     1,
+    //     gl.FALSE,
+    //     raw_data(projection_flat[:]),
+    // )
+
+    ptr, _ := mem.slice_to_components(data[:])
+    ids, _ := mem.slice_to_components(instance.indices[:])
+
+    gl.BufferData(gl.ARRAY_BUFFER, size_of(f32) * len(data), ptr, gl.DYNAMIC_DRAW)
+    gl.BufferData(
+        gl.ELEMENT_ARRAY_BUFFER,
+        size_of(u32) * len(instance.indices),
+        ids,
+        gl.DYNAMIC_DRAW,
+    )
+    fmt.println(data)
     gl.DrawElements(gl.TRIANGLES, cast(i32) len(instance.indices), gl.UNSIGNED_INT, nil)
 }
 
@@ -136,7 +173,7 @@ main :: proc() {
 
     camera := Camera {
         viewport_distance = 1,
-        viewport_size = {2, 2},
+        viewport_size = {1, 1},
         transform = Transform {
             rotation = linalg.MATRIX3F32_IDENTITY,
         },
@@ -188,7 +225,7 @@ main :: proc() {
     gl.GenBuffers(1, &element_buffer_obj)
     gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, element_buffer_obj)
 
-    gl.VertexAttribPointer(0, 2, gl.FLOAT, gl.FALSE, 2 * size_of(f32), 0)
+    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 3 * size_of(f32), 0)
     gl.EnableVertexAttribArray(0)
     gl.BindVertexArray(0) // Unbind effectively
 
@@ -197,8 +234,8 @@ main :: proc() {
     for !glfw.WindowShouldClose(window) { // Render
         gl.Clear(gl.COLOR_BUFFER_BIT)
         gl.BindVertexArray(vertex_array_obj)
-        instance_render(camera, instance1)
-        instance_render(camera, instance2)
+        instance_render(camera, instance1, program)
+        // instance_render(camera, instance2, program)
         glfw.SwapBuffers(window)
 
         angle += increment
