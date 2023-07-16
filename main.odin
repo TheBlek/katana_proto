@@ -115,23 +115,23 @@ instance_render :: proc(camera: Camera, instance: Instance, shader: u32) {
 
     gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE)
 
-    // model_location := gl.GetUniformLocation(shader, "model")
-    // model_flat := matrix_flatten(instance.model_matrix)
-    // gl.UniformMatrix4fv(
-    //     model_location,
-    //     1,
-    //     gl.FALSE,
-    //     raw_data(model_flat[:]),
-    // )
+    model_location := gl.GetUniformLocation(shader, "model")
+    model_flat := matrix_flatten(instance.model_matrix)
+    gl.UniformMatrix4fv(
+        model_location,
+        1,
+        gl.FALSE,
+        raw_data(model_flat[:]),
+    )
 
-    // view_location := gl.GetUniformLocation(shader, "view")
-    // view_flat := matrix_flatten(camera.camera_matrix)
-    // gl.UniformMatrix4fv(
-    //     view_location,
-    //     1,
-    //     gl.FALSE,
-    //     raw_data(view_flat[:]),
-    // )
+    view_location := gl.GetUniformLocation(shader, "view")
+    view_flat := matrix_flatten(camera.camera_matrix)
+    gl.UniformMatrix4fv(
+        view_location,
+        1,
+        gl.FALSE,
+        raw_data(view_flat[:]),
+    )
 
     projection_location := gl.GetUniformLocation(shader, "projection")
     projection_flat := matrix_flatten(camera.projection_matrix)
@@ -141,7 +141,6 @@ instance_render :: proc(camera: Camera, instance: Instance, shader: u32) {
         gl.FALSE,
         raw_data(projection_flat[:]),
     )
-    vertex := Vec4{instance.vertices[0].x, instance.vertices[1].y, instance.vertices[2].z, 1}
 
     gl.BufferData(gl.ARRAY_BUFFER, size_of(f32) * len(data), raw_data(data[:]), gl.DYNAMIC_DRAW)
     gl.BufferData(
