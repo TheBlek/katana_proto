@@ -59,13 +59,16 @@ Camera :: struct {
     camera_matrix: linalg.Matrix4f32,
 }
 
-disposition_matrix :: proc(position: Vec3) -> Mat4 {
+disposition_matrix :: proc(using transform: Transform) -> Mat4 {
     using linalg
     translation := MATRIX4F32_IDENTITY
     translation[3][0] = position.x
     translation[3][1] = position.y
     translation[3][2] = position.z
-    return translation
+
+    homo_rotation := linalg.matrix4_from_matrix3(rotation)
+    homo_rotation[3][3] = 1
+    return translation * homo_rotation
 }
 
 // left, right, bottom, top, near, far
@@ -192,9 +195,7 @@ main :: proc() {
     {
         using camera
         projection_matrix = calculate_projection_matrix(fov, near, far)
-        homo_rotation := linalg.matrix4_from_matrix3(transform.rotation)
-        homo_rotation[3][3] = 1
-        camera_matrix = linalg.matrix4_inverse(homo_rotation) * disposition_matrix(-transform.position) 
+        camera_matrix = linalg.matrix4_inverse(disposition_matrix(transform))
     }
 
     vertices := []Vec3 {
@@ -216,12 +217,7 @@ main :: proc() {
             rotation = linalg.MATRIX3F32_IDENTITY,
         },
     }
-    {
-        using instance1
-        homo_rotation := linalg.matrix4_from_matrix3(transform.rotation)
-        homo_rotation[3][3] = 1
-        model_matrix = disposition_matrix(transform.position) * homo_rotation
-    }
+    instance1.model_matrix = disposition_matrix(instance1.transform)
     // instance2 := Instance {
     //     model = model,
     //     transform = Transform {
@@ -266,14 +262,14 @@ main :: proc() {
             fmt.println("Turned!")
         }
         {
+            using camera
+            transform.rotation = linalg.matrix3_from_euler_angle_y(angle)
+            camera_matrix = linalg.matrix4_inverse(disposition_matrix(transform))
+        }
+        {
             using instance1
             transform.rotation = linalg.matrix3_from_euler_angle_y(angle)
-
-            homo_rotation := linalg.matrix4_from_matrix3(transform.rotation)
-            homo_rotation[3][3] = 1
-
-            model_matrix = disposition_matrix(transform.position) * homo_rotation
-            model_matrix = homo_rotation * disposition_matrix(transform.position)
+            model_matrix = disposition_matrix(transform)
         }
         
         glfw.PollEvents()
