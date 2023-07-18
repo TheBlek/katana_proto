@@ -50,7 +50,6 @@ Transform :: struct {
 }
 
 Camera :: struct {
-    viewport_distance: f32,
     fov: f32,
     near: f32,
     far: f32,
@@ -71,6 +70,14 @@ disposition_matrix :: proc(using transform: Transform) -> Mat4 {
     return translation * homo_rotation
 }
 
+scale_matrix :: proc(scale: Vec3) -> (result: Mat4) {
+    result[0][0] = scale.x
+    result[1][1] = scale.y
+    result[2][2] = scale.z
+    result[3][3] = 1
+    return 
+}
+
 // left, right, bottom, top, near, far
 calculate_projection_matrix_full :: proc(l, r, b, t, n, f: f32) -> (projection_matrix: Mat4) {
     projection_matrix = {
@@ -84,7 +91,7 @@ calculate_projection_matrix_full :: proc(l, r, b, t, n, f: f32) -> (projection_m
 
 calculate_projection_matrix :: proc(fov, near, far: f32) -> (projection_matrix: Mat4) {
     fov := math.to_radians(fov)
-    aspect_ratio: f32 = 16 / 9
+    aspect_ratio: f32 = f32(WIDTH) / HEIGHT
 
     width := 2 * near * math.tan(fov/2)
     height := width / aspect_ratio
@@ -160,8 +167,53 @@ Model :: struct {
 Instance :: struct {
     using model: Model,
     transform: Transform,
+    scale: Vec3,
     model_matrix: Mat4,
 }
+
+UNIT_CUBE :: Model {
+    vertices = { 
+        Vec3{-0.5, -0.5, -0.5},
+        Vec3{0.5, -0.5, -0.5},
+        Vec3{0.5, -0.5, 0.5},
+        Vec3{-0.5, -0.5, 0.5},
+
+        Vec3{-0.5, 0.5, -0.5},
+        Vec3{0.5, 0.5, -0.5},
+        Vec3{0.5, 0.5, 0.5},
+        Vec3{-0.5, 0.5, 0.5},
+    },
+    indices = {
+        // Bottom
+        0, 1, 2,
+        0, 3, 2,
+
+        // Top
+        4, 5, 6,
+        4, 7, 6,
+
+        // Back
+        0, 1, 5,
+        0, 5, 4,
+
+        // Front
+        3, 2, 6,
+        3, 6, 7,
+
+        // Left
+        0, 3, 7,
+        0, 4, 7,
+
+        // Right
+        1, 2, 6,
+        1, 5, 6,
+    },
+}
+
+UNIT_SPHERE :: Model{vertices = {{0.000, 0.000, -1.000}, {1.000, 0.000, 0.000}, {0.000, 0.000, 1.000}, {-1.000, 0.000, 0.000}, {0.000, -1.000, 0.000}, {0.000, 1.000, 0.000}, {0.707, 0.000, -0.707}, {0.000, 0.707, -0.707}, {0.707, 0.707, 0.000}, {-0.707, 0.000, -0.707}, {-0.707, 0.707, 0.000}, {0.000, -0.707, -0.707}, {0.707, -0.707, 0.000}, {-0.707, -0.707, 0.000}, {0.707, 0.000, 0.707}, {0.000, 0.707, 0.707}, {-0.707, 0.000, 0.707}, {0.000, -0.707, 0.707}, {0.383, 0.000, -0.924}, {0.000, 0.383, -0.924}, {0.408, 0.408, -0.816}, {0.924, 0.000, -0.383}, {0.924, 0.383, 0.000}, {0.816, 0.408, -0.408}, {0.383, 0.924, 0.000}, {0.000, 0.924, -0.383}, {0.408, 0.816, -0.408}, {-0.383, 0.000, -0.924}, {-0.408, 0.408, -0.816}, {-0.924, 0.000, -0.383}, {-0.924, 0.383, 0.000}, {-0.816, 0.408, -0.408}, {-0.383, 0.924, 0.000}, {-0.408, 0.816, -0.408}, {0.000, -0.383, -0.924}, {0.408, -0.408, -0.816}, {0.924, -0.383, 0.000}, {0.816, -0.408, -0.408}, {0.383, -0.924, 0.000}, {0.000, -0.924, -0.383}, {0.408, -0.816, -0.408}, {-0.408, -0.408, -0.816}, {-0.924, -0.383, 0.000}, {-0.816, -0.408, -0.408}, {-0.383, -0.924, 0.000}, {-0.408, -0.816, -0.408}, {0.383, 0.000, 0.924}, {0.000, 0.383, 0.924}, {0.408, 0.408, 0.816}, {0.924, 0.000, 0.383}, {0.816, 0.408, 0.408}, {0.000, 0.924, 0.383}, {0.408, 0.816, 0.408}, {-0.383, 0.000, 0.924}, {-0.408, 0.408, 0.816}, {-0.924, 0.000, 0.383}, {-0.816, 0.408, 0.408}, {-0.408, 0.816, 0.408}, {0.000, -0.383, 0.924}, {0.408, -0.408, 0.816}, {0.816, -0.408, 0.408}, {0.000, -0.924, 0.383}, {0.408, -0.816, 0.408}, {-0.408, -0.408, 0.816}, {-0.816, -0.408, 0.408}, {-0.408, -0.816, 0.408}}, indices = {0, 18, 19, 6, 18, 20, 7, 20, 19, 20, 18, 19, 1, 21, 22, 6, 21, 23, 8, 23, 22, 23, 21, 22, 5, 24, 25, 8, 24, 26, 7, 26, 25, 26, 24, 25, 8, 23, 26, 6, 23, 20, 7, 20, 26, 20, 23, 26, 0, 27, 19, 9, 27, 28, 7, 28, 19, 28, 27, 19, 3, 29, 30, 9, 29, 31, 10, 31, 30, 31, 29, 30, 5, 32, 25, 10, 32, 33, 7, 33, 25, 33, 32, 25, 10, 31, 33, 9, 31, 28, 7, 28, 33, 28, 31, 33, 0, 18, 34, 6, 18, 35, 11, 35, 34, 35, 18, 34, 1, 21, 36, 6, 21, 37, 12, 37, 36, 37, 21, 36, 4, 38, 39, 12, 38, 40, 11, 40, 39, 40, 38, 39, 12, 37, 40, 6, 37, 35, 11, 35, 40, 35, 37, 40, 0, 27, 34, 9, 27, 41, 11, 41, 34, 41, 27, 34, 3, 29, 42, 9, 29, 43, 13, 43, 42, 43, 29, 42, 4, 44, 39, 13, 44, 45, 11, 45, 39, 45, 44, 39, 13, 43, 45, 9, 43, 41, 11, 41, 45, 41, 43, 45, 2, 46, 47, 14, 46, 48, 15, 48, 47, 48, 46, 47, 1, 49, 22, 14, 49, 50, 8, 50, 22, 50, 49, 22, 5, 24, 51, 8, 24, 52, 15, 52, 51, 52, 24, 51, 8, 50, 52, 14, 50, 48, 15, 48, 52, 48, 50, 52, 2, 53, 47, 16, 53, 54, 15, 54, 47, 54, 53, 47, 3, 55, 30, 16, 55, 56, 10, 56, 30, 56, 55, 30, 5, 32, 51, 10, 32, 57, 15, 57, 51, 57, 32, 51, 10, 56, 57, 16, 56, 54, 15, 54, 57, 54, 56, 57, 2, 46, 58, 14, 46, 59, 17, 59, 58, 59, 46, 58, 1, 49, 36, 14, 49, 60, 12, 60, 36, 60, 49, 36, 4, 38, 61, 12, 38, 62, 17, 62, 61, 62, 38, 61, 12, 60, 62, 14, 60, 59, 17, 59, 62, 59, 60, 62, 2, 53, 58, 16, 53, 63, 17, 63, 58, 63, 53, 58, 3, 55, 42, 16, 55, 64, 13, 64, 42, 64, 55, 42, 4, 44, 61, 13, 44, 65, 17, 65, 61, 65, 44, 61, 13, 64, 65, 16, 64, 63, 17, 63, 65, 63, 64, 65}}
+
+WIDTH :: 720
+HEIGHT :: 480
 
 main :: proc() {
     if glfw.Init() == 0 {
@@ -170,7 +222,7 @@ main :: proc() {
     }
     defer glfw.Terminate()
 
-    window := glfw.CreateWindow(640, 480, "Hello world", nil, nil) 
+    window := glfw.CreateWindow(WIDTH, HEIGHT, "Hello world", nil, nil) 
     defer glfw.DestroyWindow(window)
 
     if window == nil {
@@ -184,13 +236,12 @@ main :: proc() {
     gl.load_up_to(4, 6, glfw.gl_set_proc_address)
 
     camera := Camera {
-        viewport_distance = 1,
-        fov = 100,
+        fov = 70,
         transform = Transform {
             rotation = linalg.MATRIX3F32_IDENTITY,
         },
         near = 0.1,
-        far = 5,
+        far = 100,
     }
     {
         using camera
@@ -211,21 +262,14 @@ main :: proc() {
         indices = indices,
     }
     instance1 := Instance {
-        model = model,
+        model = UNIT_SPHERE,
+        scale = 1,
         transform = Transform {
-            position = Vec3{0, 0, -2},
+            position = Vec3{0, -0.5, -5},
             rotation = linalg.MATRIX3F32_IDENTITY,
         },
     }
     instance1.model_matrix = disposition_matrix(instance1.transform)
-    // instance2 := Instance {
-    //     model = model,
-    //     transform = Transform {
-    //         position = Vec3{1, 0, 0},
-    //         rotation = linalg.MATRIX3F32_IDENTITY,
-    //     },
-    // }
-    // instance2.model_matrix = disposition_matrix(instance2.transform)
 
     program, ok := load_shaders("plain.shader")
     assert(ok, "Shader error. Aborting") 
@@ -234,7 +278,6 @@ main :: proc() {
     vertex_array_obj: u32
     gl.GenVertexArrays(1, &vertex_array_obj)
     gl.BindVertexArray(vertex_array_obj)
-
     vertex_buffer_obj: u32
     gl.GenBuffers(1, &vertex_buffer_obj)
     gl.BindBuffer(gl.ARRAY_BUFFER, vertex_buffer_obj)
@@ -253,24 +296,24 @@ main :: proc() {
         gl.Clear(gl.COLOR_BUFFER_BIT)
         gl.BindVertexArray(vertex_array_obj)
         instance_render(camera, instance1, program)
-        // instance_render(camera, instance2, program)
         glfw.SwapBuffers(window)
 
         angle += increment
         if abs(angle) > math.PI/2 - 0.01 {
             increment *= -1
-            fmt.println("Turned!")
+            // fmt.println("Turned!")
         }
         {
             using camera
             transform.rotation = linalg.matrix3_from_euler_angle_y(angle)
             camera_matrix = linalg.matrix4_inverse(disposition_matrix(transform))
         }
-        {
-            using instance1
-            transform.rotation = linalg.matrix3_from_euler_angle_y(angle)
-            model_matrix = disposition_matrix(transform)
-        }
+        // {
+        //     using instance1
+        //     transform.rotation = linalg.matrix3_from_euler_angle_y(angle)
+        //     transform.position.z = -abs(angle) - 1
+        //     model_matrix = disposition_matrix(transform) * scale_matrix(scale)
+        // }
         
         glfw.PollEvents()
     }
