@@ -51,7 +51,7 @@ Transform :: struct {
 
 Camera :: struct {
     viewport_distance: f32,
-    viewport_size: Vec2,
+    fov: f32,
     near: f32,
     far: f32,
     transform: Transform,
@@ -79,7 +79,12 @@ calculate_projection_matrix_full :: proc(l, r, b, t, n, f: f32) -> (projection_m
     return
 }
 
-calculate_projection_matrix :: proc(width, height, near, far: f32) -> (projection_matrix: Mat4) {
+calculate_projection_matrix :: proc(fov, near, far: f32) -> (projection_matrix: Mat4) {
+    fov := math.to_radians(fov)
+    aspect_ratio: f32 = 16 / 9
+
+    width := 2 * near * math.tan(fov/2)
+    height := width / aspect_ratio
     projection_matrix = {
         2 * near / width,   0,                  0,                              0,
         0,                  2 * near / height,  0,                              0,
@@ -177,7 +182,7 @@ main :: proc() {
 
     camera := Camera {
         viewport_distance = 1,
-        viewport_size = {1, 1},
+        fov = 100,
         transform = Transform {
             rotation = linalg.MATRIX3F32_IDENTITY,
         },
@@ -186,7 +191,7 @@ main :: proc() {
     }
     {
         using camera
-        projection_matrix = calculate_projection_matrix(viewport_size.x, viewport_size.y, near, far)
+        projection_matrix = calculate_projection_matrix(fov, near, far)
         homo_rotation := linalg.matrix4_from_matrix3(transform.rotation)
         homo_rotation[3][3] = 1
         camera_matrix = linalg.matrix4_inverse(homo_rotation) * disposition_matrix(-transform.position) 
@@ -267,15 +272,8 @@ main :: proc() {
             homo_rotation := linalg.matrix4_from_matrix3(transform.rotation)
             homo_rotation[3][3] = 1
 
-            model_matrix = homo_rotation * disposition_matrix(transform.position)
-            fmt.println(model_matrix)
             model_matrix = disposition_matrix(transform.position) * homo_rotation
-            fmt.println(model_matrix)
-            fmt.println()
-
-            fmt.println(homo_rotation)
-            fmt.println(transform.position)
-            fmt.println()
+            model_matrix = homo_rotation * disposition_matrix(transform.position)
         }
         
         glfw.PollEvents()
