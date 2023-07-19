@@ -83,7 +83,7 @@ get_sphere :: proc(n: int) -> Model {
     }
     
     // LEAK
-    return Model{ vertices[:], indices[:] }
+    return Model{ vertices=vertices[:], indices=indices[:] }
 }
 
 get_capsule :: proc(n: int) -> Model {
@@ -188,5 +188,5 @@ get_capsule :: proc(n: int) -> Model {
         }
     }
 
-    return Model { vertices[:], indices[:] }
+    return Model { vertices=vertices[:], indices=indices[:] }
 }

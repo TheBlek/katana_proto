@@ -16,7 +16,7 @@ Mat3 :: linalg.Matrix3f32
 Mat3x4 :: linalg.Matrix3x4f32
 Mat4 :: linalg.Matrix4f32
 
-load_shaders :: proc(filepath: string) -> (program: u32, ok := true) {
+shader_load_from_combined_file :: proc(filepath: string) -> (program: u32, ok := true) {
     data, ok_file := os.read_entire_file(filepath, context.allocator)
     if !ok_file {
         ok = false
@@ -53,6 +53,16 @@ shader_set_uniform_matrix4 :: proc(program: u32, name: cstring, mat: Mat4) {
         gl.FALSE,
         raw_data(flat[:]),
     )
+}
+
+shader_set_uniform_vec4 :: proc(program: u32, name: cstring, vec: Vec4) {
+    location := gl.GetUniformLocation(program, name)
+    gl.Uniform4f(location, vec.x, vec.y, vec.z, vec.w)
+}
+
+shader_set_uniform_vec3 :: proc(program: u32, name: cstring, vec: Vec3) {
+    location := gl.GetUniformLocation(program, name)
+    gl.Uniform3f(location, vec.x, vec.y, vec.z)
 }
 
 Transform :: struct {
@@ -117,8 +127,17 @@ calculate_projection_matrix :: proc(fov, near, far: f32) -> (projection_matrix: 
 
 instance_data :: proc(using camera: Camera, instance: Instance) -> (data: [dynamic]f32) {
     reserve(&data, 3*len(instance.vertices))
-    for vertex in instance.vertices {
-        append(&data, vertex.x, vertex.y, vertex.z)
+
+    assert(
+        len(instance.vertices) == len(instance.normals),
+        "Normals do not correspond with vertices correctly",
+    )
+
+    for i in 0..<len(instance.vertices) {
+        using instance
+        append(&data, vertices[i].x, vertices[i].y, vertices[i].z)
+        normal := transform.rotation * normals[i]
+        append(&data, normal.x, normal.y, normal.z)
     }
     return
 }
@@ -127,11 +146,14 @@ instance_render :: proc(camera: Camera, instance: Instance, shader: u32) {
     data := instance_data(camera, instance)
     defer delete(data)
 
-    gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE)
+    // gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE)
 
     shader_set_uniform_matrix4(shader, "model", instance.model_matrix)
     shader_set_uniform_matrix4(shader, "view", camera.camera_matrix)
     shader_set_uniform_matrix4(shader, "projection", camera.projection_matrix)
+    shader_set_uniform_vec4(shader, "object_color", instance.color)
+    shader_set_uniform_vec4(shader, "light_color", 1)
+    shader_set_uniform_vec3(shader, "light_position", Vec3{1, 1, 0})
 
     gl.BufferData(gl.ARRAY_BUFFER, size_of(f32) * len(data), raw_data(data[:]), gl.DYNAMIC_DRAW)
     gl.BufferData(
@@ -145,6 +167,7 @@ instance_render :: proc(camera: Camera, instance: Instance, shader: u32) {
 
 Model :: struct {
     vertices: []Vec3,
+    normals: []Vec3,
     indices: []u32,
 }
 
@@ -153,19 +176,54 @@ Instance :: struct {
     transform: Transform,
     scale: Vec3,
     model_matrix: Mat4,
+    color: Vec4,
 }
 
 UNIT_CUBE :: Model {
     vertices = { 
+        // Bottom
         Vec3{-0.5, -0.5, -0.5},
         Vec3{0.5, -0.5, -0.5},
         Vec3{0.5, -0.5, 0.5},
         Vec3{-0.5, -0.5, 0.5},
 
+        // Top
         Vec3{-0.5, 0.5, -0.5},
         Vec3{0.5, 0.5, -0.5},
         Vec3{0.5, 0.5, 0.5},
         Vec3{-0.5, 0.5, 0.5},
+
+        // Back
+        Vec3{-0.5, -0.5, -0.5},
+        Vec3{0.5, -0.5, -0.5},
+        Vec3{-0.5, 0.5, -0.5},
+        Vec3{0.5, 0.5, -0.5},
+
+        // Front
+        Vec3{0.5, -0.5, 0.5},
+        Vec3{-0.5, -0.5, 0.5},
+        Vec3{0.5, 0.5, 0.5},
+        Vec3{-0.5, 0.5, 0.5},
+        
+        // Left
+        Vec3{-0.5, -0.5, -0.5},
+        Vec3{-0.5, -0.5, 0.5},
+        Vec3{-0.5, 0.5, -0.5},
+        Vec3{-0.5, 0.5, 0.5},
+
+        // Right
+        Vec3{0.5, -0.5, -0.5},
+        Vec3{0.5, -0.5, 0.5},
+        Vec3{0.5, 0.5, -0.5},
+        Vec3{0.5, 0.5, 0.5},
+    },
+    normals = {
+        Vec3{0, -1, 0}, Vec3{0, -1, 0}, Vec3{0, -1, 0}, Vec3{0, -1, 0},
+        Vec3{0, 1, 0}, Vec3{0, 1, 0}, Vec3{0, 1, 0}, Vec3{0, 1, 0},
+        Vec3{0, 0, -1}, Vec3{0, 0, -1}, Vec3{0, 0, -1}, Vec3{0, 0, -1}, 
+        Vec3{0, 0, 1}, Vec3{0, 0, 1}, Vec3{0, 0, 1}, Vec3{0, 0, 1}, 
+        Vec3{-1, 0, 0}, Vec3{-1, 0, 0}, Vec3{-1, 0, 0}, Vec3{-1, 0, 0}, 
+        Vec3{1, 0, 0}, Vec3{1, 0, 0}, Vec3{1, 0, 0}, Vec3{1, 0, 0}, 
     },
     indices = {
         // Bottom
@@ -177,20 +235,20 @@ UNIT_CUBE :: Model {
         4, 7, 6,
 
         // Back
-        0, 1, 5,
-        0, 5, 4,
+        8, 9, 10,
+        9, 11, 10,
 
         // Front
-        3, 2, 6,
-        3, 6, 7,
+        12, 13, 14,
+        15, 14, 13,
 
         // Left
-        0, 3, 7,
-        0, 4, 7,
+        16, 17, 18,
+        17, 18, 19,
 
         // Right
-        1, 2, 6,
-        1, 5, 6,
+        20, 21, 22,
+        21, 22, 23,
     },
 }
 
@@ -219,6 +277,7 @@ main :: proc() {
     glfw.SwapInterval(1)
 
     gl.load_up_to(4, 6, glfw.gl_set_proc_address)
+    gl.Enable(gl.DEPTH_TEST)
 
     camera := Camera {
         fov = 70,
@@ -247,17 +306,17 @@ main :: proc() {
         indices = indices,
     }
     instance1 := Instance {
-        model = UNIT_CAPSULE,
+        model = UNIT_CUBE,
         scale = 1,
         transform = Transform {
-            position = Vec3{0, -0.5, -5},
+            position = Vec3{0, -1, -5},
             rotation = linalg.MATRIX3F32_IDENTITY,
         },
+        color = Vec4{1, 1, 0, 1},
     }
-    fmt.println(get_capsule(2))
     instance1.model_matrix = disposition_matrix(instance1.transform)
 
-    program, ok := load_shaders("plain.shader")
+    program, ok := shader_load_from_combined_file("plain.shader")
     assert(ok, "Shader error. Aborting") 
     gl.UseProgram(program)
 
@@ -272,14 +331,16 @@ main :: proc() {
     gl.GenBuffers(1, &element_buffer_obj)
     gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, element_buffer_obj)
 
-    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 3 * size_of(f32), 0)
     gl.EnableVertexAttribArray(0)
+    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 6 * size_of(f32), 0)
+    gl.EnableVertexAttribArray(1)
+    gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 6 * size_of(f32), 3 * size_of(f32))
     gl.BindVertexArray(0) // Unbind effectively
 
     increment: f32 = 0.01
     angle: f32 = 0
     for !glfw.WindowShouldClose(window) { // Render
-        gl.Clear(gl.COLOR_BUFFER_BIT)
+        gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
         gl.BindVertexArray(vertex_array_obj)
         instance_render(camera, instance1, program)
         glfw.SwapBuffers(window)
