@@ -164,7 +164,8 @@ instance_render :: proc(camera: Camera, instance: Instance, shader: u32) {
     shader_set_uniform_matrix4(shader, "projection", camera.projection_matrix)
     shader_set_uniform_vec4(shader, "object_color", instance.color)
     shader_set_uniform_vec4(shader, "light_color", 1) 
-    shader_set_uniform_vec3(shader, "light_position", Vec3{1, 1, 0})
+    shader_set_uniform_vec3(shader, "light_position", Vec3{0.5, 1, -3.5})
+    shader_set_uniform_vec3(shader, "viewer_position", camera.transform.position)
 
     gl.BufferData(gl.ARRAY_BUFFER, size_of(f32) * len(data), raw_data(data[:]), gl.DYNAMIC_DRAW)
     gl.BufferData(
