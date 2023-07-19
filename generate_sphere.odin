@@ -81,9 +81,29 @@ get_sphere :: proc(n: int) -> Model {
     for i in 0..<n {
         expand_triangles(&vertices, &indices)
     }
+
+    triangle_count := len(indices) / 3
+    new_vertices: [dynamic]Vec3
+    normals: [dynamic]Vec3
+    new_indices: [dynamic]u32
+    for i in 0..<triangle_count {
+        a := vertices[indices[3 * i]]
+        b := vertices[indices[3 * i + 1]]
+        c := vertices[indices[3 * i + 2]]
+
+        raw_normal := linalg.cross(a - b, b - c)
+        normal := linalg.normalize(raw_normal * math.sign(linalg.dot(raw_normal, a)))
+
+        first := cast(u32)len(new_vertices)
+        append(&new_indices, first, first + 1, first + 2)
+        append(&new_vertices, a, b, c)
+        append(&normals, normal, normal, normal)
+    }
     
+    delete(indices)
+    delete(vertices)
     // LEAK
-    return Model{ vertices=vertices[:], indices=indices[:] }
+    return Model{ new_vertices[:], normals[:], new_indices[:] }
 }
 
 get_capsule :: proc(n: int) -> Model {
@@ -188,5 +208,26 @@ get_capsule :: proc(n: int) -> Model {
         }
     }
 
-    return Model { vertices=vertices[:], indices=indices[:] }
+    triangle_count = len(indices) / 3
+    new_vertices: [dynamic]Vec3
+    normals: [dynamic]Vec3
+    new_indices: [dynamic]u32
+    for i in 0..<triangle_count {
+        a := vertices[indices[3 * i]]
+        b := vertices[indices[3 * i + 1]]
+        c := vertices[indices[3 * i + 2]]
+
+        raw_normal := linalg.cross(a - b, b - c)
+        normal := linalg.normalize(raw_normal * math.sign(linalg.dot(raw_normal, a)))
+
+        first := cast(u32)len(new_vertices)
+        append(&new_indices, first, first + 1, first + 2)
+        append(&new_vertices, a, b, c)
+        append(&normals, normal, normal, normal)
+    }
+    
+    delete(indices)
+    delete(vertices)
+
+    return Model { new_vertices[:], normals[:], new_indices[:] }
 }
