@@ -44,6 +44,17 @@ shader_load_from_combined_file :: proc(filepath: string) -> (program: u32, ok :=
     return gl.load_shaders_source(vs_source, fs_source)
 }
 
+shader_set_uniform_matrix3 :: proc(program: u32, name: cstring, mat: Mat3) {
+    location := gl.GetUniformLocation(program, name)
+    flat := matrix_flatten(mat)
+    gl.UniformMatrix3fv(
+        location,
+        1,
+        gl.FALSE,
+        raw_data(flat[:]),
+    )
+}
+
 shader_set_uniform_matrix4 :: proc(program: u32, name: cstring, mat: Mat4) {
     location := gl.GetUniformLocation(program, name)
     flat := matrix_flatten(mat)
@@ -136,8 +147,7 @@ instance_data :: proc(using camera: Camera, instance: Instance) -> (data: [dynam
     for i in 0..<len(instance.vertices) {
         using instance
         append(&data, vertices[i].x, vertices[i].y, vertices[i].z)
-        normal := transform.rotation * normals[i]
-        append(&data, normal.x, normal.y, normal.z)
+        append(&data, normals[i].x, normals[i].y, normals[i].z)
     }
     return
 }
@@ -149,10 +159,11 @@ instance_render :: proc(camera: Camera, instance: Instance, shader: u32) {
     // gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE)
 
     shader_set_uniform_matrix4(shader, "model", instance.model_matrix)
+    shader_set_uniform_matrix3(shader, "normal_matrix", instance.normal_matrix)
     shader_set_uniform_matrix4(shader, "view", camera.camera_matrix)
     shader_set_uniform_matrix4(shader, "projection", camera.projection_matrix)
     shader_set_uniform_vec4(shader, "object_color", instance.color)
-    shader_set_uniform_vec4(shader, "light_color", 1)
+    shader_set_uniform_vec4(shader, "light_color", 1) 
     shader_set_uniform_vec3(shader, "light_position", Vec3{1, 1, 0})
 
     gl.BufferData(gl.ARRAY_BUFFER, size_of(f32) * len(data), raw_data(data[:]), gl.DYNAMIC_DRAW)
@@ -165,6 +176,11 @@ instance_render :: proc(camera: Camera, instance: Instance, shader: u32) {
     gl.DrawElements(gl.TRIANGLES, cast(i32) len(instance.indices), gl.UNSIGNED_INT, nil)
 }
 
+instance_update :: proc(using instance: ^Instance) {
+    model_matrix = disposition_matrix(transform)
+    normal_matrix = linalg.matrix3_from_matrix4(inverse_transpose(model_matrix))
+}
+
 Model :: struct {
     vertices: []Vec3,
     normals: []Vec3,
@@ -175,8 +191,9 @@ Instance :: struct {
     using model: Model,
     transform: Transform,
     scale: Vec3,
-    model_matrix: Mat4,
     color: Vec4,
+    model_matrix: Mat4,
+    normal_matrix: Mat3,
 }
 
 UNIT_CUBE :: Model {
@@ -316,7 +333,7 @@ main :: proc() {
     }
     fmt.println(get_sphere(2))
     fmt.println(get_capsule(2))
-    instance1.model_matrix = disposition_matrix(instance1.transform)
+    instance_update(&instance1)
 
     program, ok := shader_load_from_combined_file("plain.shader")
     assert(ok, "Shader error. Aborting") 
@@ -361,8 +378,8 @@ main :: proc() {
             using instance1
             transform.rotation = linalg.matrix3_from_euler_angle_y(angle)
             // transform.position.z = -abs(angle) - 1
-            model_matrix = disposition_matrix(transform) * scale_matrix(scale)
         }
+        instance_update(&instance1)
         
         glfw.PollEvents()
     }

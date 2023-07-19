@@ -7,6 +7,7 @@ layout(location = 1) in vec3 normal;
 uniform mat4 projection;
 uniform mat4 model;
 uniform mat4 view;
+uniform mat3 normal_matrix;
 
 out vec3 v_normal;
 out vec3 v_frag_position;
@@ -15,7 +16,7 @@ void main()
 {
     gl_Position = projection * view * model * vec4(position, 1.0f);
     v_frag_position = (model * vec4(position, 1.0f)).xyz;
-    v_normal = normal;
+    v_normal = normal_matrix * normal;
 };
 
 #shader fragment
@@ -37,6 +38,7 @@ void main()
     
     vec3 light_dir = normalize(light_position - v_frag_position);
     vec4 diffuse = max(dot(light_dir, v_normal), 0) * light_color;
+
     o_color = (ambient + diffuse) * object_color;
 };
 
