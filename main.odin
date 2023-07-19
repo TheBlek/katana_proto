@@ -44,6 +44,17 @@ load_shaders :: proc(filepath: string) -> (program: u32, ok := true) {
     return gl.load_shaders_source(vs_source, fs_source)
 }
 
+shader_set_uniform_matrix4 :: proc(program: u32, name: cstring, mat: Mat4) {
+    location := gl.GetUniformLocation(program, name)
+    flat := matrix_flatten(mat)
+    gl.UniformMatrix4fv(
+        location,
+        1,
+        gl.FALSE,
+        raw_data(flat[:]),
+    )
+}
+
 Transform :: struct {
     position: Vec3,
     rotation: Mat3,
@@ -104,50 +115,23 @@ calculate_projection_matrix :: proc(fov, near, far: f32) -> (projection_matrix: 
     return
 }
 
-instance_project :: proc(using camera: Camera, instance: Instance) -> (data: [dynamic]f32) {
+instance_data :: proc(using camera: Camera, instance: Instance) -> (data: [dynamic]f32) {
     reserve(&data, 3*len(instance.vertices))
     for vertex in instance.vertices {
-        global := []f32{vertex.x, vertex.y, vertex.z}
-        // global := Vec4{vertex.x, vertex.y, vertex.z, 1}
-        // viewport := cast(Vec3)(projection_matrix * camera_matrix * instance.model_matrix * global)
-        // projected := viewport.xy / viewport.z
-        append(&data, ..global)
+        append(&data, vertex.x, vertex.y, vertex.z)
     }
     return
 }
 
 instance_render :: proc(camera: Camera, instance: Instance, shader: u32) {
-    data := instance_project(camera, instance)
+    data := instance_data(camera, instance)
     defer delete(data)
 
     gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE)
 
-    model_location := gl.GetUniformLocation(shader, "model")
-    model_flat := matrix_flatten(instance.model_matrix)
-    gl.UniformMatrix4fv(
-        model_location,
-        1,
-        gl.FALSE,
-        raw_data(model_flat[:]),
-    )
-
-    view_location := gl.GetUniformLocation(shader, "view")
-    view_flat := matrix_flatten(camera.camera_matrix)
-    gl.UniformMatrix4fv(
-        view_location,
-        1,
-        gl.FALSE,
-        raw_data(view_flat[:]),
-    )
-
-    projection_location := gl.GetUniformLocation(shader, "projection")
-    projection_flat := matrix_flatten(camera.projection_matrix)
-    gl.UniformMatrix4fv(
-        projection_location,
-        1,
-        gl.FALSE,
-        raw_data(projection_flat[:]),
-    )
+    shader_set_uniform_matrix4(shader, "model", instance.model_matrix)
+    shader_set_uniform_matrix4(shader, "view", camera.camera_matrix)
+    shader_set_uniform_matrix4(shader, "projection", camera.projection_matrix)
 
     gl.BufferData(gl.ARRAY_BUFFER, size_of(f32) * len(data), raw_data(data[:]), gl.DYNAMIC_DRAW)
     gl.BufferData(
