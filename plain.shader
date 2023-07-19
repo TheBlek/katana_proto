@@ -47,7 +47,6 @@ void main()
     
     vec4 specular = pow(max(dot(view_dir, reflection), 0), 64) * light_color;
 
-    //o_color = (ambient + diffuse + specular) * object_color;
-    o_color = vec4(1, 0, 0, 1);
+    o_color = (ambient + diffuse + specular) * object_color;
 };
 

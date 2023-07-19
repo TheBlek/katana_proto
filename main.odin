@@ -162,10 +162,10 @@ main :: proc() {
     gl.Enable(gl.DEPTH_TEST)
 
     camera := Camera {
-        fov = 100,
+        fov = 70,
         transform = Transform {
             rotation = linalg.MATRIX3F32_IDENTITY,
-            position = Vec3{0, 0, 10},
+            position = Vec3{0, 5, 25},
         },
         near = 0.1,
         far = 1000,
@@ -176,28 +176,18 @@ main :: proc() {
         camera_matrix = linalg.matrix4_inverse(disposition_matrix(transform))
     }
 
-    vertices := []Vec3 {
-        Vec3{-0.5, 0.5, 0},
-        Vec3{0.5, 0.5, 0},
-        Vec3{0.5, -0.5, 0},
-        Vec3{-0.5, -0.5, 0},
-    }
-    indices := []u32{0, 1, 3, 1, 2, 3}
-
     m, ok_file := model_load_from_file("./resources/katana.gltf")
     assert(ok_file)
-    model := Model {
-        vertices = vertices,
-        indices = indices,
-    }
+    fmt.println(m.vertices)
+
     instance1 := Instance {
         model = m,
         scale = 1,
         transform = Transform {
-            position = Vec3{0, 0, -7},
+            position = Vec3{-20, 0, 0},
             rotation = linalg.MATRIX3F32_IDENTITY,
         },
-        color = Vec4{1, 1, 0, 1},
+        color = Vec4{0, 0, 1, 1},
     }
     instance_update(&instance1)
 
@@ -231,16 +221,16 @@ main :: proc() {
         glfw.SwapBuffers(window)
 
         angle += increment
-        if abs(angle) > math.PI/2 - 0.01 {
-            increment *= -1
-            // fmt.println("Turned!")
-        }
+        // if abs(angle) > math.PI/2 - 0.01 {
+        //     increment *= -1
+        //     // fmt.println("Turned!")
+        // }
         // {
         //     using camera
         //     transform.rotation = linalg.matrix3_from_euler_angle_y(angle)
         //     camera_matrix = linalg.matrix4_inverse(disposition_matrix(transform))
         // }
-        instance1.transform.rotation = linalg.matrix3_from_euler_angle_y(angle)
+        instance1.transform.rotation = linalg.matrix3_from_euler_angle_x(angle)
         instance_update(&instance1)
         
         glfw.PollEvents()

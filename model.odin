@@ -126,7 +126,7 @@ instance_render :: proc(camera: Camera, instance: Instance, shader: u32) {
     shader_set_uniform_matrix4(shader, "projection", camera.projection_matrix)
     shader_set_uniform_vec4(shader, "object_color", instance.color)
     shader_set_uniform_vec4(shader, "light_color", 1) 
-    shader_set_uniform_vec3(shader, "light_position", Vec3{0.5, 1, -3.5})
+    shader_set_uniform_vec3(shader, "light_position", Vec3{0.5, 6, -3.5})
     shader_set_uniform_vec3(shader, "viewer_position", camera.transform.position)
 
     gl.BufferData(gl.ARRAY_BUFFER, size_of(f32) * len(data), raw_data(data[:]), gl.DYNAMIC_DRAW)
@@ -215,11 +215,46 @@ model_load_from_file :: proc(path: string) -> (model: Model, ok := true) {
             "NORMAL",
             path,
         )
-        assert(len(vertices) % 3 == 0)
+
         indices: [dynamic]u32
-        reserve(&indices, len(vertices))
-        for i in 0..<len(vertices) {
-            append(&indices, u32(i))
+        accessors := gltf_descriptor.(json.Object)["accessors"].(json.Array)
+        bufferviews := gltf_descriptor.(json.Object)["bufferViews"].(json.Array)
+        buffers := gltf_descriptor.(json.Object)["buffers"].(json.Array)
+
+        id := cast(u32) primitive["indices"].(json.Float)
+        accessor := accessors[id].(json.Object)
+
+        assert(accessor["type"].(json.String) == "SCALAR")
+        assert(accessor["componentType"].(json.Float) == gl.UNSIGNED_SHORT)
+
+        bufferview_id := cast(int) accessor["bufferView"].(json.Float)
+        bufferview := bufferviews[bufferview_id].(json.Object)
+        buffer_id := cast(int) bufferview["buffer"].(json.Float)
+        filename := buffers[buffer_id].(json.Object)["uri"].(json.String)
+        target_path := filepath.join({filepath.dir(path), filename})
+
+        data, ok := os.read_entire_file_from_filename(target_path)
+        assert(ok)
+
+        offset := cast(int) bufferview["byteOffset"].(json.Float)
+        if off := accessor["byteOffset"]; off != nil {
+            offset += cast(int) off.(json.Float)
+        }
+
+        size := size_of(u16)
+        stride: int 
+        if stride_mb := bufferview["byteStride"]; stride_mb != nil {
+            stride = cast(int) stride_mb.(json.Float)
+        } else {
+            stride = size
+        }
+
+        length := cast(int) bufferview["byteLength"].(json.Float)
+        for i := offset; i < offset + length; i += stride {
+            bytes := data[i:][:size]
+            assert(len(bytes) == size)
+            id: ^u16 = cast(^u16) rawptr(raw_data(bytes))
+            append(&indices, u32(id^)) 
         }
         model = {vertices, normals, indices[:]}
         fmt.println("Parsed a mesh")
