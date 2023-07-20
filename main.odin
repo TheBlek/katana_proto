@@ -91,26 +91,6 @@ Camera :: struct {
     camera_matrix: linalg.Matrix4f32,
 }
 
-disposition_matrix :: proc(using transform: Transform) -> Mat4 {
-    using linalg
-    translation := MATRIX4F32_IDENTITY
-    translation[3][0] = position.x
-    translation[3][1] = position.y
-    translation[3][2] = position.z
-
-    homo_rotation := linalg.matrix4_from_matrix3(rotation)
-    homo_rotation[3][3] = 1
-    return translation * homo_rotation
-}
-
-scale_matrix :: proc(scale: Vec3) -> (result: Mat4) {
-    result[0][0] = scale.x
-    result[1][1] = scale.y
-    result[2][2] = scale.z
-    result[3][3] = 1
-    return 
-}
-
 // left, right, bottom, top, near, far
 calculate_projection_matrix_full :: proc(l, r, b, t, n, f: f32) -> (projection_matrix: Mat4) {
     projection_matrix = {
@@ -173,16 +153,15 @@ main :: proc() {
     {
         using camera
         projection_matrix = calculate_projection_matrix(fov, near, far)
-        camera_matrix = linalg.matrix4_inverse(disposition_matrix(transform))
+        camera_matrix = inverse(disposition_matrix(transform))
     }
 
     m, ok_file := model_load_from_file("./resources/katana.gltf")
     assert(ok_file)
-    fmt.println(m.vertices)
 
     instance1 := Instance {
         model = m,
-        scale = 1,
+        scale = 0.5,
         transform = Transform {
             position = Vec3{-20, 0, 0},
             rotation = linalg.MATRIX3F32_IDENTITY,
@@ -214,24 +193,74 @@ main :: proc() {
 
     increment: f32 = 0.01
     angle: f32 = 0
+    prev_key_state: map[i32]i32
     for !glfw.WindowShouldClose(window) { // Render
+        // Game logic
+        angle += increment
+        instance1.transform.rotation = linalg.matrix3_from_euler_angle_x(angle)
+        instance_update(&instance1)
+
+        // Input
+        e_state := glfw.GetKey(window, glfw.KEY_E)
+        if e_state == glfw.PRESS && prev_key_state[glfw.KEY_E] == glfw.RELEASE {
+            increment *= -1
+            fmt.println("Pressed e")
+        }
+        prev_key_state[glfw.KEY_E] = e_state
+
+        w_state := glfw.GetKey(window, glfw.KEY_W)
+        if w_state == glfw.PRESS {
+            using camera
+            transform.position.z -= 0.05
+            camera_matrix = inverse(disposition_matrix(transform))
+        }
+        prev_key_state[glfw.KEY_W] = w_state
+
+        s_state := glfw.GetKey(window, glfw.KEY_S)
+        if s_state == glfw.PRESS {
+            using camera
+            transform.position.z += 0.05
+            camera_matrix = inverse(disposition_matrix(transform))
+        }
+        prev_key_state[glfw.KEY_S] = s_state
+
+        a_state := glfw.GetKey(window, glfw.KEY_A)
+        if a_state == glfw.PRESS {
+            using camera
+            transform.position.x -= 0.05
+            camera_matrix = inverse(disposition_matrix(transform))
+        }
+        prev_key_state[glfw.KEY_A] = a_state
+
+        d_state := glfw.GetKey(window, glfw.KEY_D)
+        if d_state == glfw.PRESS {
+            using camera
+            transform.position.x += 0.05
+            camera_matrix = inverse(disposition_matrix(transform))
+        }
+        prev_key_state[glfw.KEY_D] = d_state
+
+        space_state := glfw.GetKey(window, glfw.KEY_SPACE)
+        if space_state == glfw.PRESS {
+            using camera
+            transform.position.y += 0.05
+            camera_matrix = inverse(disposition_matrix(transform))
+        }
+        prev_key_state[glfw.KEY_SPACE] = space_state
+
+        shift_state := glfw.GetKey(window, glfw.KEY_LEFT_SHIFT)
+        if shift_state == glfw.PRESS {
+            using camera
+            transform.position.y -= 0.05
+            camera_matrix = inverse(disposition_matrix(transform))
+        }
+        prev_key_state[glfw.KEY_LEFT_SHIFT] = d_state
+
+        // Rendering
         gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
         gl.BindVertexArray(vertex_array_obj)
         instance_render(camera, instance1, program)
         glfw.SwapBuffers(window)
-
-        angle += increment
-        // if abs(angle) > math.PI/2 - 0.01 {
-        //     increment *= -1
-        //     // fmt.println("Turned!")
-        // }
-        // {
-        //     using camera
-        //     transform.rotation = linalg.matrix3_from_euler_angle_y(angle)
-        //     camera_matrix = linalg.matrix4_inverse(disposition_matrix(transform))
-        // }
-        instance1.transform.rotation = linalg.matrix3_from_euler_angle_x(angle)
-        instance_update(&instance1)
         
         glfw.PollEvents()
     }

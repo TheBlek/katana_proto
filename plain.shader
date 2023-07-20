@@ -35,7 +35,7 @@ in vec3 v_frag_position;
 void main()
 {
     float ambient_strength = 0.1; 
-    float specular_strength = 1;
+    float specular_strength = 0.5;
 
     vec4 ambient = ambient_strength * light_color;
     
