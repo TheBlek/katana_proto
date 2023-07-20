@@ -103,7 +103,7 @@ get_sphere :: proc(n: int) -> Model {
     delete(indices)
     delete(vertices)
     // LEAK
-    return Model{ new_vertices[:], normals[:], new_indices[:] }
+    return Model{ new_vertices[:], normals[:], new_indices[:], nil }
 }
 
 get_capsule :: proc(n: int) -> Model {
@@ -229,5 +229,5 @@ get_capsule :: proc(n: int) -> Model {
     delete(indices)
     delete(vertices)
 
-    return Model { new_vertices[:], normals[:], new_indices[:] }
+    return Model { new_vertices[:], normals[:], new_indices[:], nil }
 }

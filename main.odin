@@ -9,6 +9,9 @@ import "core:math"
 import "vendor:glfw"
 import gl "vendor:OpenGL"
 import "core:encoding/json"
+import "core:image/png"
+import "core:image"
+import "core:bytes"
 
 Vec2 :: linalg.Vector2f32
 Vec3 :: linalg.Vector3f32
@@ -78,6 +81,11 @@ shader_set_uniform_vec4 :: proc(program: u32, name: cstring, vec: Vec4) {
 shader_set_uniform_vec3 :: proc(program: u32, name: cstring, vec: Vec3) {
     location := gl.GetUniformLocation(program, name)
     gl.Uniform3f(location, vec.x, vec.y, vec.z)
+}
+
+shader_set_uniform_1i :: proc(program: u32, name: cstring, value: i32) {
+    location := gl.GetUniformLocation(program, name)
+    gl.Uniform1i(location, value)
 }
 
 Transform :: struct {
@@ -162,6 +170,10 @@ main :: proc() {
 
     m, ok_file := model_load_from_file("./resources/katana.gltf")
     assert(ok_file)
+    switch &t in m.texture {
+        case TextureData:
+            t.texture_filename = "./resources/katana_texture.png" 
+    }
 
     instance1 := Instance {
         model = m,
@@ -177,6 +189,7 @@ main :: proc() {
     program, ok := shader_load_from_combined_file("plain.shader")
     assert(ok, "Shader error. Aborting") 
     gl.UseProgram(program)
+    shader_set_uniform_1i(program, "u_texture", 0)
 
     vertex_array_obj: u32
     gl.GenVertexArrays(1, &vertex_array_obj)
@@ -190,9 +203,11 @@ main :: proc() {
     gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, element_buffer_obj)
 
     gl.EnableVertexAttribArray(0)
-    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 6 * size_of(f32), 0)
+    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 8 * size_of(f32), 0)
     gl.EnableVertexAttribArray(1)
-    gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 6 * size_of(f32), 3 * size_of(f32))
+    gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 8 * size_of(f32), 3 * size_of(f32))
+    gl.EnableVertexAttribArray(2)
+    gl.VertexAttribPointer(2, 2, gl.FLOAT, gl.FALSE, 8 * size_of(f32), 6 * size_of(f32))
     gl.BindVertexArray(0) // Unbind effectively
 
     increment: f32 = 0.01
@@ -200,7 +215,7 @@ main :: proc() {
     prev_key_state: map[i32]i32
     prev_mouse_pos: Vec2
     pitch, yaw: f32
-    mouse_sensitivity:f32 = 0.01
+    mouse_sensitivity:f32 = 0
     for !glfw.WindowShouldClose(window) { // Render
         // Game logic
         angle += increment
@@ -254,8 +269,30 @@ main :: proc() {
 
         // Rendering
         gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+        switch &t in instance1.texture {
+            case TextureData:
+                if tex_id, ok := t.texture.(u32); !ok {
+                    img, err := png.load_from_file(t.texture_filename)
+                    assert(err == nil)
+                    assert(image.alpha_drop_if_present(img))
+
+                    t.texture = 0
+                    gl.GenTextures(1, &t.texture.(u32))
+                    gl.BindTexture(gl.TEXTURE_2D, t.texture.(u32))
+                    gl.TexImage2D(
+                        gl.TEXTURE_2D, 0, gl.RGB, 
+                        i32(img.width), i32(img.height), 0,
+                        gl.RGB, gl.UNSIGNED_BYTE, raw_data(bytes.buffer_to_bytes(&img.pixels)),
+                    )
+                    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);	
+                    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+                    gl.GenerateMipmap(gl.TEXTURE_2D);
+                } 
+            gl.ActiveTexture(gl.TEXTURE0)
+            gl.BindTexture(gl.TEXTURE_2D, t.texture.(u32)) 
+        }
         gl.BindVertexArray(vertex_array_obj)
-        instance_render(camera, instance1, program)
+        instance_render(camera, &instance1, program)
         glfw.SwapBuffers(window)
         
         glfw.PollEvents()

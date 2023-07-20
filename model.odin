@@ -6,11 +6,21 @@ import "core:encoding/json"
 import "core:os"
 import "core:fmt"
 import "core:path/filepath"
+import "core:image/png"
+import "core:image"
+import "core:bytes"
+
+TextureData :: struct {
+    uvs: []Vec2,
+    texture_filename: string,
+    texture: Maybe(u32), // Opengl - registered texture
+}
 
 Model :: struct {
     vertices: []Vec3,
     normals: []Vec3,
     indices: []u32,
+    texture: Maybe(TextureData),    
 }
 
 Instance :: struct {
@@ -130,12 +140,15 @@ instance_data :: proc(using camera: Camera, instance: Instance) -> (data: [dynam
         using instance
         append(&data, vertices[i].x, vertices[i].y, vertices[i].z)
         append(&data, normals[i].x, normals[i].y, normals[i].z)
+        if t, ok := instance.texture.(TextureData); ok {
+            append(&data, t.uvs[i].x, t.uvs[i].y)
+        }
     }
     return
 }
 
-instance_render :: proc(camera: Camera, instance: Instance, shader: u32) {
-    data := instance_data(camera, instance)
+instance_render :: proc(camera: Camera, instance: ^Instance, shader: u32) {
+    data := instance_data(camera, instance^)
     defer delete(data)
 
     // gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE)
@@ -179,7 +192,7 @@ model_load_from_file :: proc(path: string) -> (model: Model, ok := true) {
         primitive := mesh["primitives"].(json.Array)[0].(json.Object)
         attributes := primitive["attributes"].(json.Object)
 
-        read_attribute :: proc(gltf_descriptor, attributes: json.Object, name, path: string) -> []Vec3 {
+        read_attribute :: proc($T: typeid, gltf_descriptor, attributes: json.Object, name, path: string) -> []T {
             accessors := gltf_descriptor["accessors"].(json.Array)
             bufferviews := gltf_descriptor["bufferViews"].(json.Array)
             buffers := gltf_descriptor["buffers"].(json.Array)
@@ -187,7 +200,7 @@ model_load_from_file :: proc(path: string) -> (model: Model, ok := true) {
             id := cast(u32) attributes[name].(json.Float)
             accessor := accessors[id].(json.Object)
 
-            assert(accessor["type"].(json.String) == "VEC3")
+            // assert(accessor["type"].(json.String) == "VEC3")
             assert(accessor["componentType"].(json.Float) == gl.FLOAT)
 
             bufferview_id := cast(int) accessor["bufferView"].(json.Float)
@@ -204,7 +217,7 @@ model_load_from_file :: proc(path: string) -> (model: Model, ok := true) {
                 offset += cast(int) off.(json.Float)
             }
 
-            size := size_of(Vec3)
+            size := size_of(T)
             stride: int 
             if stride_mb := bufferview["byteStride"]; stride_mb != nil {
                 stride = cast(int) stride_mb.(json.Float)
@@ -213,16 +226,17 @@ model_load_from_file :: proc(path: string) -> (model: Model, ok := true) {
             }
 
             length := cast(int) bufferview["byteLength"].(json.Float)
-            result: [dynamic]Vec3
+            result: [dynamic]T
             for i := offset; i < offset + length; i += stride {
                 bytes := data[i:][:size]
                 assert(len(bytes) == size)
-                vec: ^Vec3 = cast(^Vec3) rawptr(raw_data(bytes))
+                vec := cast(^T) rawptr(raw_data(bytes))
                 append(&result, vec^) 
             }
             return result[:]
         }
         vertices := read_attribute(
+            Vec3, 
             gltf_descriptor.(json.Object),
             attributes,
             "POSITION",
@@ -230,9 +244,18 @@ model_load_from_file :: proc(path: string) -> (model: Model, ok := true) {
         )
         
         normals := read_attribute(
+            Vec3,
             gltf_descriptor.(json.Object),
             attributes,
             "NORMAL",
+            path,
+        )
+
+        uvs := read_attribute(
+            Vec2,
+            gltf_descriptor.(json.Object),
+            attributes,
+            "TEXCOORD_0",
             path,
         )
 
@@ -276,7 +299,7 @@ model_load_from_file :: proc(path: string) -> (model: Model, ok := true) {
             id: ^u16 = cast(^u16) rawptr(raw_data(bytes))
             append(&indices, u32(id^)) 
         }
-        model = {vertices, normals, indices[:]}
+        model = {vertices, normals, indices[:], TextureData { uvs=uvs }}
         fmt.println("Parsed a mesh")
     }
 
