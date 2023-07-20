@@ -120,8 +120,8 @@ calculate_projection_matrix :: proc(fov, near, far: f32) -> (projection_matrix: 
     return
 }
 
-WIDTH :: 720
-HEIGHT :: 480
+WIDTH :: 1280
+HEIGHT :: 720
 
 main :: proc() {
     if glfw.Init() == 0 {
@@ -225,7 +225,7 @@ main :: proc() {
             state := glfw.GetKey(window, key)
             if state == glfw.PRESS {
                 using camera
-                transform.position += movement
+                transform.position += transform.rotation * movement
                 camera_matrix = inverse(disposition_matrix(transform))
             }
             prev[key] = state
