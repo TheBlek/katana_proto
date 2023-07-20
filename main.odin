@@ -140,6 +140,7 @@ main :: proc() {
     
     glfw.MakeContextCurrent(window)
     glfw.SwapInterval(1)
+    glfw.SetInputMode(window, glfw.CURSOR, glfw.CURSOR_DISABLED)
 
     gl.load_up_to(4, 6, glfw.gl_set_proc_address)
     gl.Enable(gl.DEPTH_TEST)
@@ -197,6 +198,9 @@ main :: proc() {
     increment: f32 = 0.01
     angle: f32 = 0
     prev_key_state: map[i32]i32
+    prev_mouse_pos: Vec2
+    pitch, yaw: f32
+    mouse_sensitivity:f32 = 0.01
     for !glfw.WindowShouldClose(window) { // Render
         // Game logic
         angle += increment
@@ -233,6 +237,20 @@ main :: proc() {
         camera_movement(window, &prev_key_state, glfw.KEY_D, &camera, step * VEC3_X)
         camera_movement(window, &prev_key_state, glfw.KEY_LEFT_SHIFT, &camera, -step * VEC3_Y)
         camera_movement(window, &prev_key_state, glfw.KEY_SPACE, &camera, step * VEC3_Y)
+
+        x, y := glfw.GetCursorPos(window)
+        diff := Vec2{f32(x), f32(y)}  - prev_mouse_pos
+        if linalg.length(diff) > 0.1 {
+            offset := diff * mouse_sensitivity
+            pitch -= offset.y
+            yaw -= offset.x
+
+            pitch = clamp(pitch, -math.PI/2 - 0.1, math.PI/2 - 0.1)
+
+            camera.transform.rotation = linalg.matrix3_from_yaw_pitch_roll(yaw, pitch, 0)
+            camera.camera_matrix = inverse(disposition_matrix(camera.transform))
+            prev_mouse_pos = Vec2{f32(x), f32(y)}
+        }
 
         // Rendering
         gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
