@@ -14,8 +14,11 @@ Vec2 :: linalg.Vector2f32
 Vec3 :: linalg.Vector3f32
 Vec4 :: linalg.Vector4f32
 Mat3 :: linalg.Matrix3f32
-Mat3x4 :: linalg.Matrix3x4f32
 Mat4 :: linalg.Matrix4f32
+
+VEC3_X :: linalg.VECTOR3F32_X_AXIS
+VEC3_Y :: linalg.VECTOR3F32_Y_AXIS
+VEC3_Z :: linalg.VECTOR3F32_Z_AXIS
 
 shader_load_from_combined_file :: proc(filepath: string) -> (program: u32, ok := true) {
     data, ok_file := os.read_entire_file(filepath, context.allocator)
@@ -208,53 +211,28 @@ main :: proc() {
         }
         prev_key_state[glfw.KEY_E] = e_state
 
-        w_state := glfw.GetKey(window, glfw.KEY_W)
-        if w_state == glfw.PRESS {
-            using camera
-            transform.position.z -= 0.05
-            camera_matrix = inverse(disposition_matrix(transform))
+        camera_movement :: proc(
+            window: glfw.WindowHandle,
+            prev: ^map[i32]i32,
+            key: i32,
+            camera: ^Camera,
+            movement: Vec3,
+        ) {
+            state := glfw.GetKey(window, key)
+            if state == glfw.PRESS {
+                using camera
+                transform.position += movement
+                camera_matrix = inverse(disposition_matrix(transform))
+            }
+            prev[key] = state
         }
-        prev_key_state[glfw.KEY_W] = w_state
-
-        s_state := glfw.GetKey(window, glfw.KEY_S)
-        if s_state == glfw.PRESS {
-            using camera
-            transform.position.z += 0.05
-            camera_matrix = inverse(disposition_matrix(transform))
-        }
-        prev_key_state[glfw.KEY_S] = s_state
-
-        a_state := glfw.GetKey(window, glfw.KEY_A)
-        if a_state == glfw.PRESS {
-            using camera
-            transform.position.x -= 0.05
-            camera_matrix = inverse(disposition_matrix(transform))
-        }
-        prev_key_state[glfw.KEY_A] = a_state
-
-        d_state := glfw.GetKey(window, glfw.KEY_D)
-        if d_state == glfw.PRESS {
-            using camera
-            transform.position.x += 0.05
-            camera_matrix = inverse(disposition_matrix(transform))
-        }
-        prev_key_state[glfw.KEY_D] = d_state
-
-        space_state := glfw.GetKey(window, glfw.KEY_SPACE)
-        if space_state == glfw.PRESS {
-            using camera
-            transform.position.y += 0.05
-            camera_matrix = inverse(disposition_matrix(transform))
-        }
-        prev_key_state[glfw.KEY_SPACE] = space_state
-
-        shift_state := glfw.GetKey(window, glfw.KEY_LEFT_SHIFT)
-        if shift_state == glfw.PRESS {
-            using camera
-            transform.position.y -= 0.05
-            camera_matrix = inverse(disposition_matrix(transform))
-        }
-        prev_key_state[glfw.KEY_LEFT_SHIFT] = d_state
+        step:f32 = 0.05
+        camera_movement(window, &prev_key_state, glfw.KEY_W, &camera, -step * VEC3_Z)
+        camera_movement(window, &prev_key_state, glfw.KEY_S, &camera, step * VEC3_Z)
+        camera_movement(window, &prev_key_state, glfw.KEY_A, &camera, -step * VEC3_X)
+        camera_movement(window, &prev_key_state, glfw.KEY_D, &camera, step * VEC3_X)
+        camera_movement(window, &prev_key_state, glfw.KEY_LEFT_SHIFT, &camera, -step * VEC3_Y)
+        camera_movement(window, &prev_key_state, glfw.KEY_SPACE, &camera, step * VEC3_Y)
 
         // Rendering
         gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
