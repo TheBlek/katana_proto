@@ -215,7 +215,7 @@ main :: proc() {
     prev_key_state: map[i32]i32
     prev_mouse_pos: Vec2
     pitch, yaw: f32
-    mouse_sensitivity:f32 = 0
+    mouse_sensitivity:f32 = 0.01
     for !glfw.WindowShouldClose(window) { // Render
         // Game logic
         angle += increment

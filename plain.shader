@@ -18,7 +18,7 @@ void main()
 {
     gl_Position = projection * view * model * vec4(position, 1.0f);
     v_frag_position = (model * vec4(position, 1.0f)).xyz;
-    v_normal = normal_matrix * normal;
+    v_normal = normalize(normal_matrix * normal);
     v_uv = uv;
 };
 
@@ -27,7 +27,6 @@ void main()
 
 layout(location = 0) out vec4 o_color;
 
-uniform vec4 object_color;
 uniform vec4 light_color;
 uniform vec3 light_position;
 uniform vec3 viewer_position;
@@ -39,7 +38,7 @@ in vec2 v_uv;
 
 void main()
 {
-    float ambient_strength = 0.1; 
+    float ambient_strength = 0.15; 
     float specular_strength = 0.5;
 
     vec4 ambient = ambient_strength * light_color;
@@ -50,18 +49,10 @@ void main()
     vec3 reflection = reflect(-light_dir, v_normal);
     vec3 view_dir = normalize(viewer_position - v_frag_position);
     
-    vec4 specular = pow(max(dot(view_dir, reflection), 0), 64) * light_color;
+    vec4 specular = pow(max(dot(view_dir, reflection), 0), 32) * specular_strength * light_color;
 
+    vec4 object_color = texture(u_texture, vec2(v_uv.x, v_uv.y));
     o_color = (ambient + diffuse + specular) * object_color;
-    if (v_uv.x <= 0.5 && v_uv.y <= 0.5) {
-        o_color = vec4(1, 0, 0, 1);
-    } else if (v_uv.x > 0.5 && v_uv.y <= 0.5) {
-        o_color = vec4(0, 1, 0, 1);
-    } else if (v_uv.y > 0.5 && v_uv.x <= 0.5) {
-        o_color = vec4(0, 0, 1, 1);
-    } else {
-        o_color = vec4(1, 1, 0, 0);
-    }
-    o_color = texture(u_texture, vec2(v_uv.x, v_uv.y));
+    //o_color = vec4(reflection, 1);
 };
 
