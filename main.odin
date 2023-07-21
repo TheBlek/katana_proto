@@ -210,7 +210,7 @@ main :: proc() {
     gl.VertexAttribPointer(2, 2, gl.FLOAT, gl.FALSE, 8 * size_of(f32), 6 * size_of(f32))
     gl.BindVertexArray(0) // Unbind effectively
 
-    increment: f32 = 0.01
+    increment: f32 = 0
     angle: f32 = 0
     prev_key_state: map[i32]i32
     prev_mouse_pos: Vec2
