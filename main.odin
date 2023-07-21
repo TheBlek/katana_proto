@@ -170,11 +170,13 @@ main :: proc() {
 
     m, ok_file := model_load_from_file("./resources/katana.gltf")
     assert(ok_file)
-    switch &t in m.texture {
+    switch &t in m.texture_data {
         case TextureData:
-            t.texture_filename = "./resources/katana_texture.png"
-            t.diffuse_filename = "./resources/katana_diffuse.png"
-            t.specular_filename = "./resources/katana_specular.png"
+            t.textures = {
+                { filename="./resources/katana_texture.png" },
+                { filename="./resources/katana_diffuse.png" },
+                { filename="./resources/katana_specular.png" },
+            }
     }
 
     instance1 := Instance {
@@ -272,70 +274,6 @@ main :: proc() {
 
         // Rendering
         gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-        switch &t in instance1.texture {
-            case TextureData:
-                if tex_id, ok := t.texture.(u32); !ok {
-                    img, err := png.load_from_file(t.texture_filename)
-                    assert(err == nil)
-                    assert(image.alpha_drop_if_present(img))
-
-                    t.texture = 0
-                    gl.GenTextures(1, &t.texture.(u32))
-                    gl.BindTexture(gl.TEXTURE_2D, t.texture.(u32))
-                    gl.TexImage2D(
-                        gl.TEXTURE_2D, 0, gl.RGB, 
-                        i32(img.width), i32(img.height), 0,
-                        gl.RGB, gl.UNSIGNED_BYTE, raw_data(bytes.buffer_to_bytes(&img.pixels)),
-                    )
-                    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);	
-                    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-                    gl.GenerateMipmap(gl.TEXTURE_2D);
-                } 
-                gl.ActiveTexture(gl.TEXTURE0)
-                gl.BindTexture(gl.TEXTURE_2D, t.texture.(u32)) 
-
-                if tex_id, ok := t.diffuse.(u32); !ok {
-                    img, err := png.load_from_file(t.diffuse_filename)
-                    assert(err == nil)
-                    assert(image.alpha_drop_if_present(img))
-
-                    t.diffuse = 0
-                    gl.GenTextures(1, &t.diffuse.(u32))
-                    gl.BindTexture(gl.TEXTURE_2D, t.diffuse.(u32))
-                    gl.TexImage2D(
-                        gl.TEXTURE_2D, 0, gl.RGB, 
-                        i32(img.width), i32(img.height), 0,
-                        gl.RGB, gl.UNSIGNED_BYTE, raw_data(bytes.buffer_to_bytes(&img.pixels)),
-                    )
-                    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);	
-                    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-                    gl.GenerateMipmap(gl.TEXTURE_2D);
-                } 
-
-                gl.ActiveTexture(gl.TEXTURE1)
-                gl.BindTexture(gl.TEXTURE_2D, t.diffuse.(u32)) 
-
-                if tex_id, ok := t.specular.(u32); !ok {
-                    img, err := png.load_from_file(t.specular_filename)
-                    assert(err == nil)
-                    assert(image.alpha_drop_if_present(img))
-
-                    t.specular = 0
-                    gl.GenTextures(1, &t.specular.(u32))
-                    gl.BindTexture(gl.TEXTURE_2D, t.specular.(u32))
-                    gl.TexImage2D(
-                        gl.TEXTURE_2D, 0, gl.RGB, 
-                        i32(img.width), i32(img.height), 0,
-                        gl.RGB, gl.UNSIGNED_BYTE, raw_data(bytes.buffer_to_bytes(&img.pixels)),
-                    )
-                    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);	
-                    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-                    gl.GenerateMipmap(gl.TEXTURE_2D);
-                } 
-
-                gl.ActiveTexture(gl.TEXTURE2)
-                gl.BindTexture(gl.TEXTURE_2D, t.specular.(u32)) 
-        }
         gl.BindVertexArray(vertex_array_obj)
         instance_render(camera, &instance1, program)
         glfw.SwapBuffers(window)

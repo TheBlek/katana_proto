@@ -10,21 +10,21 @@ import "core:image/png"
 import "core:image"
 import "core:bytes"
 
+Texture :: struct {
+    filename: string,
+    id: Maybe(u32),
+}
+
 TextureData :: struct {
     uvs: []Vec2,
-    texture_filename: string,
-    texture: Maybe(u32), // Opengl - registered texture
-    diffuse_filename: string,
-    diffuse: Maybe(u32),
-    specular_filename: string,
-    specular: Maybe(u32),
+    textures: []Texture,
 }
 
 Model :: struct {
     vertices: []Vec3,
     normals: []Vec3,
     indices: []u32,
-    texture: Maybe(TextureData),    
+    texture_data: Maybe(TextureData),    
 }
 
 Instance :: struct {
@@ -139,11 +139,16 @@ instance_data :: proc(using camera: Camera, instance: Instance) -> (data: [dynam
         "Normals do not correspond with vertices correctly",
     )
 
+    assert(
+        len(instance.vertices) == len(instance.texture_data.(TextureData).uvs),
+        "UVs do not correspond with vertices correctly",
+    )
+
     for i in 0..<len(instance.vertices) {
         using instance
         append(&data, vertices[i].x, vertices[i].y, vertices[i].z)
         append(&data, normals[i].x, normals[i].y, normals[i].z)
-        if t, ok := instance.texture.(TextureData); ok {
+        if t, ok := instance.texture_data.(TextureData); ok {
             append(&data, t.uvs[i].x, t.uvs[i].y)
         }
     }
@@ -155,6 +160,28 @@ instance_render :: proc(camera: Camera, instance: ^Instance, shader: u32) {
     defer delete(data)
 
     // gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE)
+    switch &tex_data in instance.texture_data {
+        case TextureData:
+            for &tex, i in tex_data.textures {
+                if tex_id, ok := tex.id.(u32); !ok {
+                    img, err := png.load_from_file(tex.filename)
+                    assert(err == nil)
+                    assert(image.alpha_drop_if_present(img))
+
+                    tex.id = 0
+                    gl.GenTextures(1, &tex.id.(u32))
+                    gl.BindTexture(gl.TEXTURE_2D, tex.id.(u32))
+                    gl.TexImage2D(
+                        gl.TEXTURE_2D, 0, gl.RGB, 
+                        i32(img.width), i32(img.height), 0,
+                        gl.RGB, gl.UNSIGNED_BYTE, raw_data(bytes.buffer_to_bytes(&img.pixels)),
+                    )
+                    gl.GenerateMipmap(gl.TEXTURE_2D);
+                } 
+                gl.ActiveTexture(gl.TEXTURE0 + u32(i))
+                gl.BindTexture(gl.TEXTURE_2D, tex.id.(u32)) 
+            }
+    }
 
     shader_set_uniform_matrix4(shader, "model", instance.model_matrix)
     shader_set_uniform_matrix3(shader, "normal_matrix", instance.normal_matrix)
@@ -302,7 +329,6 @@ model_load_from_file :: proc(path: string) -> (model: Model, ok := true) {
             append(&indices, u32(id^)) 
         }
         model = {vertices, normals, indices[:], TextureData { uvs=uvs }}
-        fmt.println("Parsed a mesh")
     }
 
     return
