@@ -14,6 +14,10 @@ TextureData :: struct {
     uvs: []Vec2,
     texture_filename: string,
     texture: Maybe(u32), // Opengl - registered texture
+    diffuse_filename: string,
+    diffuse: Maybe(u32),
+    specular_filename: string,
+    specular: Maybe(u32),
 }
 
 Model :: struct {
@@ -27,7 +31,6 @@ Instance :: struct {
     using model: Model,
     transform: Transform,
     scale: Vec3,
-    color: Vec4,
     model_matrix: Mat4,
     normal_matrix: Mat3,
 }
@@ -157,9 +160,8 @@ instance_render :: proc(camera: Camera, instance: ^Instance, shader: u32) {
     shader_set_uniform_matrix3(shader, "normal_matrix", instance.normal_matrix)
     shader_set_uniform_matrix4(shader, "view", camera.camera_matrix)
     shader_set_uniform_matrix4(shader, "projection", camera.projection_matrix)
-    shader_set_uniform_vec4(shader, "object_color", instance.color)
     shader_set_uniform_vec4(shader, "light_color", 1) 
-    shader_set_uniform_vec3(shader, "light_position", Vec3{0.5, 6, -3.5})
+    shader_set_uniform_vec3(shader, "light_position", Vec3{0, 2, 0})
     shader_set_uniform_vec3(shader, "viewer_position", camera.transform.position)
 
     gl.BufferData(gl.ARRAY_BUFFER, size_of(f32) * len(data), raw_data(data[:]), gl.DYNAMIC_DRAW)

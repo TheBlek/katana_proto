@@ -172,17 +172,18 @@ main :: proc() {
     assert(ok_file)
     switch &t in m.texture {
         case TextureData:
-            t.texture_filename = "./resources/katana_texture.png" 
+            t.texture_filename = "./resources/katana_texture.png"
+            t.diffuse_filename = "./resources/katana_diffuse.png"
+            t.specular_filename = "./resources/katana_specular.png"
     }
 
     instance1 := Instance {
         model = m,
         scale = 0.5,
         transform = Transform {
-            position = Vec3{-20, 0, 0},
+            position = Vec3{-10, 0, 0},
             rotation = linalg.MATRIX3F32_IDENTITY,
         },
-        color = Vec4{0, 0, 1, 1},
     }
     instance_update(&instance1)
 
@@ -190,6 +191,8 @@ main :: proc() {
     assert(ok, "Shader error. Aborting") 
     gl.UseProgram(program)
     shader_set_uniform_1i(program, "u_texture", 0)
+    shader_set_uniform_1i(program, "u_diffuse", 1)
+    shader_set_uniform_1i(program, "u_specular", 2)
 
     vertex_array_obj: u32
     gl.GenVertexArrays(1, &vertex_array_obj)
@@ -288,8 +291,50 @@ main :: proc() {
                     gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
                     gl.GenerateMipmap(gl.TEXTURE_2D);
                 } 
-            gl.ActiveTexture(gl.TEXTURE0)
-            gl.BindTexture(gl.TEXTURE_2D, t.texture.(u32)) 
+                gl.ActiveTexture(gl.TEXTURE0)
+                gl.BindTexture(gl.TEXTURE_2D, t.texture.(u32)) 
+
+                if tex_id, ok := t.diffuse.(u32); !ok {
+                    img, err := png.load_from_file(t.diffuse_filename)
+                    assert(err == nil)
+                    assert(image.alpha_drop_if_present(img))
+
+                    t.diffuse = 0
+                    gl.GenTextures(1, &t.diffuse.(u32))
+                    gl.BindTexture(gl.TEXTURE_2D, t.diffuse.(u32))
+                    gl.TexImage2D(
+                        gl.TEXTURE_2D, 0, gl.RGB, 
+                        i32(img.width), i32(img.height), 0,
+                        gl.RGB, gl.UNSIGNED_BYTE, raw_data(bytes.buffer_to_bytes(&img.pixels)),
+                    )
+                    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);	
+                    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+                    gl.GenerateMipmap(gl.TEXTURE_2D);
+                } 
+
+                gl.ActiveTexture(gl.TEXTURE1)
+                gl.BindTexture(gl.TEXTURE_2D, t.diffuse.(u32)) 
+
+                if tex_id, ok := t.specular.(u32); !ok {
+                    img, err := png.load_from_file(t.specular_filename)
+                    assert(err == nil)
+                    assert(image.alpha_drop_if_present(img))
+
+                    t.specular = 0
+                    gl.GenTextures(1, &t.specular.(u32))
+                    gl.BindTexture(gl.TEXTURE_2D, t.specular.(u32))
+                    gl.TexImage2D(
+                        gl.TEXTURE_2D, 0, gl.RGB, 
+                        i32(img.width), i32(img.height), 0,
+                        gl.RGB, gl.UNSIGNED_BYTE, raw_data(bytes.buffer_to_bytes(&img.pixels)),
+                    )
+                    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);	
+                    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+                    gl.GenerateMipmap(gl.TEXTURE_2D);
+                } 
+
+                gl.ActiveTexture(gl.TEXTURE2)
+                gl.BindTexture(gl.TEXTURE_2D, t.specular.(u32)) 
         }
         gl.BindVertexArray(vertex_array_obj)
         instance_render(camera, &instance1, program)
