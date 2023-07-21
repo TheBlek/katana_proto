@@ -53,6 +53,15 @@ void main()
     vec4 specular = pow(max(dot(view_dir, reflection), 0), 64) * light_color;
 
     o_color = (ambient + diffuse + specular) * object_color;
-    o_color = texture(u_texture, vec2(1 - v_uv.x, 1 - v_uv.y));
+    if (v_uv.x <= 0.5 && v_uv.y <= 0.5) {
+        o_color = vec4(1, 0, 0, 1);
+    } else if (v_uv.x > 0.5 && v_uv.y <= 0.5) {
+        o_color = vec4(0, 1, 0, 1);
+    } else if (v_uv.y > 0.5 && v_uv.x <= 0.5) {
+        o_color = vec4(0, 0, 1, 1);
+    } else {
+        o_color = vec4(1, 1, 0, 0);
+    }
+    o_color = texture(u_texture, vec2(v_uv.x, v_uv.y));
 };
 

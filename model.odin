@@ -230,8 +230,8 @@ model_load_from_file :: proc(path: string) -> (model: Model, ok := true) {
             for i := offset; i < offset + length; i += stride {
                 bytes := data[i:][:size]
                 assert(len(bytes) == size)
-                vec := cast(^T) rawptr(raw_data(bytes))
-                append(&result, vec^) 
+                el := cast(^T) rawptr(raw_data(bytes))
+                append(&result, el^) 
             }
             return result[:]
         }

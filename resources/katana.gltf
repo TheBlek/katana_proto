@@ -8,21 +8,11 @@
 		{
 			"name":"Scene",
 			"nodes":[
-				0,
-				1
+				0
 			]
 		}
 	],
 	"nodes":[
-		{
-			"name":"Empty",
-			"rotation":[
-				-1,
-				0,
-				0,
-				4.371138828673793e-08
-			]
-		},
 		{
 			"mesh":0,
 			"name":"Cube",
@@ -36,6 +26,11 @@
 				0.0661320686340332,
 				0.0661320686340332,
 				0.07277975231409073
+			],
+			"translation":[
+				-1.4212746620178223,
+				0,
+				0
 			]
 		}
 	],
@@ -58,7 +53,7 @@
 		{
 			"bufferView":0,
 			"componentType":5126,
-			"count":801,
+			"count":790,
 			"max":[
 				57.86247253417969,
 				2.2758431434631348,
@@ -74,13 +69,13 @@
 		{
 			"bufferView":1,
 			"componentType":5126,
-			"count":801,
+			"count":790,
 			"type":"VEC2"
 		},
 		{
 			"bufferView":2,
 			"componentType":5126,
-			"count":801,
+			"count":790,
 			"type":"VEC3"
 		},
 		{
@@ -93,32 +88,32 @@
 	"bufferViews":[
 		{
 			"buffer":0,
-			"byteLength":9612,
+			"byteLength":9480,
 			"byteOffset":0,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":6408,
-			"byteOffset":9612,
+			"byteLength":6320,
+			"byteOffset":9480,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":9612,
-			"byteOffset":16020,
+			"byteLength":9480,
+			"byteOffset":15800,
 			"target":34962
 		},
 		{
 			"buffer":0,
 			"byteLength":2688,
-			"byteOffset":25632,
+			"byteOffset":25280,
 			"target":34963
 		}
 	],
 	"buffers":[
 		{
-			"byteLength":28320,
+			"byteLength":27968,
 			"uri":"katana.bin"
 		}
 	]
