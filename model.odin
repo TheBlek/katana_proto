@@ -33,6 +33,7 @@ Instance :: struct {
     scale: Vec3,
     model_matrix: Mat4,
     normal_matrix: Mat3,
+    color: Vec3,
 }
 
 UNIT_CUBE :: Model {
@@ -139,10 +140,12 @@ instance_data :: proc(using camera: Camera, instance: Instance) -> (data: [dynam
         "Normals do not correspond with vertices correctly",
     )
 
-    assert(
-        len(instance.vertices) == len(instance.texture_data.(TextureData).uvs),
-        "UVs do not correspond with vertices correctly",
-    )
+    if texs, exists := instance.texture_data.(TextureData); exists {
+        assert(
+            len(instance.vertices) == len(texs.uvs),
+            "UVs do not correspond with vertices correctly",
+        )
+    }
 
     for i in 0..<len(instance.vertices) {
         using instance
@@ -153,52 +156,6 @@ instance_data :: proc(using camera: Camera, instance: Instance) -> (data: [dynam
         }
     }
     return
-}
-
-instance_render :: proc(camera: Camera, instance: ^Instance, shader: u32) {
-    data := instance_data(camera, instance^)
-    defer delete(data)
-
-    // gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE)
-    switch &tex_data in instance.texture_data {
-        case TextureData:
-            for &tex, i in tex_data.textures {
-                if tex_id, ok := tex.id.(u32); !ok {
-                    img, err := png.load_from_file(tex.filename)
-                    assert(err == nil)
-                    assert(image.alpha_drop_if_present(img))
-
-                    tex.id = 0
-                    gl.GenTextures(1, &tex.id.(u32))
-                    gl.BindTexture(gl.TEXTURE_2D, tex.id.(u32))
-                    gl.TexImage2D(
-                        gl.TEXTURE_2D, 0, gl.RGB, 
-                        i32(img.width), i32(img.height), 0,
-                        gl.RGB, gl.UNSIGNED_BYTE, raw_data(bytes.buffer_to_bytes(&img.pixels)),
-                    )
-                    gl.GenerateMipmap(gl.TEXTURE_2D);
-                } 
-                gl.ActiveTexture(gl.TEXTURE0 + u32(i))
-                gl.BindTexture(gl.TEXTURE_2D, tex.id.(u32)) 
-            }
-    }
-
-    shader_set_uniform_matrix4(shader, "model", instance.model_matrix)
-    shader_set_uniform_matrix3(shader, "normal_matrix", instance.normal_matrix)
-    shader_set_uniform_matrix4(shader, "view", camera.camera_matrix)
-    shader_set_uniform_matrix4(shader, "projection", camera.projection_matrix)
-    shader_set_uniform_vec4(shader, "light_color", 1) 
-    shader_set_uniform_vec3(shader, "light_position", Vec3{0, 2, 0})
-    shader_set_uniform_vec3(shader, "viewer_position", camera.transform.position)
-
-    gl.BufferData(gl.ARRAY_BUFFER, size_of(f32) * len(data), raw_data(data[:]), gl.DYNAMIC_DRAW)
-    gl.BufferData(
-        gl.ELEMENT_ARRAY_BUFFER,
-        size_of(u32) * len(instance.indices),
-        raw_data(instance.indices[:]),
-        gl.DYNAMIC_DRAW,
-    )
-    gl.DrawElements(gl.TRIANGLES, cast(i32) len(instance.indices), gl.UNSIGNED_INT, nil)
 }
 
 instance_update :: proc(using instance: ^Instance) {
