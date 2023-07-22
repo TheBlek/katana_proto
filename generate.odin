@@ -82,28 +82,11 @@ get_sphere :: proc(n: int) -> Model {
         expand_triangles(&vertices, &indices)
     }
 
-    triangle_count := len(indices) / 3
-    new_vertices: [dynamic]Vec3
-    normals: [dynamic]Vec3
-    new_indices: [dynamic]u32
-    for i in 0..<triangle_count {
-        a := vertices[indices[3 * i]]
-        b := vertices[indices[3 * i + 1]]
-        c := vertices[indices[3 * i + 2]]
-
-        raw_normal := linalg.cross(a - b, b - c)
-        normal := linalg.normalize(raw_normal * math.sign(linalg.dot(raw_normal, a)))
-
-        first := cast(u32)len(new_vertices)
-        append(&new_indices, first, first + 1, first + 2)
-        append(&new_vertices, a, b, c)
-        append(&normals, normal, normal, normal)
-    }
-    
+    new_vertices, normals, new_indices := generate_normals(vertices[:], indices[:])    
     delete(indices)
     delete(vertices)
-    // LEAK
-    return Model{ new_vertices[:], normals[:], new_indices[:], nil }
+
+    return Model { new_vertices, normals, new_indices, nil }
 }
 
 get_capsule :: proc(n: int) -> Model {
@@ -208,7 +191,15 @@ get_capsule :: proc(n: int) -> Model {
         }
     }
 
-    triangle_count = len(indices) / 3
+    new_vertices, normals, new_indices := generate_normals(vertices[:], indices[:])    
+    delete(indices)
+    delete(vertices)
+
+    return Model { new_vertices, normals, new_indices, nil }
+}
+
+generate_normals :: proc(vertices: []Vec3, indices: []u32) -> ([]Vec3, []Vec3, []u32) {
+    triangle_count := len(indices) / 3
     new_vertices: [dynamic]Vec3
     normals: [dynamic]Vec3
     new_indices: [dynamic]u32
@@ -225,9 +216,43 @@ get_capsule :: proc(n: int) -> Model {
         append(&new_vertices, a, b, c)
         append(&normals, normal, normal, normal)
     }
-    
+    return new_vertices[:], normals[:], new_indices[:]
+}
+
+get_terrain :: proc(width, height : f32, segment_count : int) -> Model {
+    corner := Vec3{-width/2, -height/2, 0}
+    step := Vec3{width, height, 0} / f32(segment_count)
+    vertices: [dynamic]Vec3
+    vertex_count := segment_count + 1
+    reserve(&vertices, vertex_count * vertex_count)
+    for i in 0..<vertex_count {
+        for j in 0..<vertex_count {
+            append(&vertices, corner + step * {f32(i), f32(j), 0})
+        }
+    }
+
+    indices: [dynamic]u32
+    reserve(&indices, 6 * segment_count * segment_count)
+    for row in 0..<segment_count {
+        for column in 0..<segment_count {
+            append(
+                &indices,
+                u32(row * vertex_count + column),
+                u32(row * vertex_count + (column + 1)),
+                u32((row + 1) * vertex_count + (column + 1)),
+            )
+            append(
+                &indices,
+                u32(row * vertex_count + column),
+                u32((row + 1) * vertex_count + column),
+                u32((row + 1) * vertex_count + (column + 1)),
+            )
+        }
+    }
+
+    new_vertices, normals, new_indices := generate_normals(vertices[:], indices[:])    
     delete(indices)
     delete(vertices)
 
-    return Model { new_vertices[:], normals[:], new_indices[:], nil }
+    return Model{ new_vertices, normals, new_indices, nil}
 }

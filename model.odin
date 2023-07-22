@@ -288,7 +288,6 @@ model_load_from_file :: proc(path: string) -> (model: Model, ok := true) {
             path,
         )
 
-        indices: [dynamic]u32
         accessors := gltf_descriptor.(json.Object)["accessors"].(json.Array)
         bufferviews := gltf_descriptor.(json.Object)["bufferViews"].(json.Array)
         buffers := gltf_descriptor.(json.Object)["buffers"].(json.Array)
@@ -321,6 +320,7 @@ model_load_from_file :: proc(path: string) -> (model: Model, ok := true) {
             stride = size
         }
 
+        indices: [dynamic]u32
         length := cast(int) bufferview["byteLength"].(json.Float)
         for i := offset; i < offset + length; i += stride {
             bytes := data[i:][:size]
