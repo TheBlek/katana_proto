@@ -259,18 +259,12 @@ renderer_draw_instance :: proc(renderer: $T/Renderer, camera: Camera, instance: 
             gl.UseProgram(shader)
     }
 
-    // gl.EnableVertexAttribArray(0)
-    // gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 8 * size_of(f32), 0)
-    // gl.EnableVertexAttribArray(1)
-    // gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 8 * size_of(f32), 3 * size_of(f32))
-    // gl.EnableVertexAttribArray(2)
-    // gl.VertexAttribPointer(2, 2, gl.FLOAT, gl.FALSE, 8 * size_of(f32), 6 * size_of(f32))
     shader_set_uniform_matrix4(shader, "model", instance.model_matrix)
     shader_set_uniform_matrix3(shader, "normal_matrix", instance.normal_matrix)
     shader_set_uniform_matrix4(shader, "view", camera.camera_matrix)
     shader_set_uniform_matrix4(shader, "projection", camera.projection_matrix)
     shader_set_uniform_vec4(shader, "light_color", 1) 
-    shader_set_uniform_vec3(shader, "light_position", Vec3{0, 2, 0})
+    shader_set_uniform_vec3(shader, "light_position", Vec3{0, 3, 0})
     shader_set_uniform_vec3(shader, "viewer_position", camera.transform.position)
     if _, textured := instance.texture_data.(TextureData); !textured {
         shader_set_uniform_vec3(shader, "object_color", instance.color)
@@ -326,15 +320,15 @@ main :: proc() {
         model = m,
         scale = 0.5,
         transform = Transform {
-            position = Vec3{-10, 0, 0},
+            position = Vec3{-10, 2, 0},
             rotation = linalg.MATRIX3F32_IDENTITY,
         },
     }
     instance2 := Instance {
-        model = UNIT_CUBE,
+        model = get_terrain(100, 100, 100),
         scale = 1,
         transform = Transform {
-            position = Vec3{0, 1, 0},
+            position = Vec3{0, 0, 0},
             rotation = linalg.MATRIX3F32_IDENTITY,
         },
         color = Vec3{1, 0, 0},

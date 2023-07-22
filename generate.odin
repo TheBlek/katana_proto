@@ -220,14 +220,14 @@ generate_normals :: proc(vertices: []Vec3, indices: []u32) -> ([]Vec3, []Vec3, [
 }
 
 get_terrain :: proc(width, height : f32, segment_count : int) -> Model {
-    corner := Vec3{-width/2, -height/2, 0}
-    step := Vec3{width, height, 0} / f32(segment_count)
+    corner := Vec3{-width/2, 0, -height/2}
+    step := Vec3{width, 0, height} / f32(segment_count)
     vertices: [dynamic]Vec3
     vertex_count := segment_count + 1
     reserve(&vertices, vertex_count * vertex_count)
     for i in 0..<vertex_count {
         for j in 0..<vertex_count {
-            append(&vertices, corner + step * {f32(i), f32(j), 0})
+            append(&vertices, corner + step * {f32(i), 0, f32(j)})
         }
     }
 
