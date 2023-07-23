@@ -2,6 +2,7 @@ package main
 
 import "core:math"
 import "core:math/linalg"
+import "core:math/rand"
 import "core:slice"
 import "core:fmt"
 
@@ -225,12 +226,62 @@ get_terrain :: proc(width, height : f32, segment_count : int) -> Model {
     vertices: [dynamic]Vec3
     vertex_count := segment_count + 1
     reserve(&vertices, vertex_count * vertex_count)
+
+    grid_vectors: [256]Vec2
+    grid_step := Vec3 {width / 15, 0, height / 15}
+    for &vec in grid_vectors {
+        vec.x = rand.float32()
+        vec.y = rand.float32()
+        vec = linalg.normalize(vec)
+    }
+    max_value: f32 = 0
     for i in 0..<vertex_count {
         for j in 0..<vertex_count {
-            append(&vertices, corner + step * {f32(i), 0, f32(j)})
+            projection := step * {f32(i), 0, f32(j)}
+
+            grid_pos := linalg.floor(projection / grid_step)
+            if grid_pos.x == 15 {
+                grid_pos.x = 14
+            }
+            if grid_pos.z == 15 {
+                grid_pos.z = 14
+            }
+            inner_pos := projection - grid_pos * grid_step
+
+            a_vec := grid_vectors[int(grid_pos.x) + int(grid_pos.z) * 16]
+            b_vec := grid_vectors[int(grid_pos.x + 1) + int(grid_pos.z) * 16]
+            c_vec := grid_vectors[int(grid_pos.x + 1) + int(grid_pos.z + 1) * 16]
+            d_vec := grid_vectors[int(grid_pos.x) + int(grid_pos.z + 1) * 16]
+
+            a := Vec3{grid_pos.x, 0, grid_pos.z} * grid_step
+            b := Vec3{grid_pos.x + 1, 0, grid_pos.z} * grid_step
+            c := Vec3{grid_pos.x + 1, 0, grid_pos.z + 1} * grid_step
+            d := Vec3{grid_pos.x, 0, grid_pos.z + 1} * grid_step
+             
+            a_weight := linalg.dot(cast([2]f32)a_vec, (inner_pos - a).xz)
+            b_weight := linalg.dot(cast([2]f32)b_vec, (inner_pos - b).xz)
+            c_weight := linalg.dot(cast([2]f32)c_vec, (inner_pos - c).xz)
+            d_weight := linalg.dot(cast([2]f32)d_vec, (inner_pos - d).xz)
+
+            fade :: proc(x: f32) -> f32 {
+                return (6*x*x - 15*x + 10)*x*x*x
+            }
+
+            u := fade(inner_pos.x / grid_step.x)
+            v := fade(inner_pos.z / grid_step.z)
+            value := linalg.lerp(
+                linalg.lerp(a_weight, d_weight, v),
+                linalg.lerp(b_weight, c_weight, v),
+                u,
+            )
+            projection.y = value
+            max_value = max(value, max_value)
+
+            append(&vertices, projection)
         }
     }
-
+    
+    fmt.println(max_value)
     indices: [dynamic]u32
     reserve(&indices, 6 * segment_count * segment_count)
     for row in 0..<segment_count {
@@ -249,6 +300,7 @@ get_terrain :: proc(width, height : f32, segment_count : int) -> Model {
             )
         }
     }
+
 
     new_vertices, normals, new_indices := generate_normals(vertices[:], indices[:])    
     delete(indices)
