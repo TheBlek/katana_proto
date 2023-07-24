@@ -199,7 +199,7 @@ get_capsule :: proc(n: int) -> Model {
     return Model { new_vertices, normals, new_indices, nil }
 }
 
-generate_normals :: proc(vertices: []Vec3, indices: []u32) -> ([]Vec3, []Vec3, []u32) {
+generate_normals :: proc(vertices: []Vec3, indices: []u32, sphere := true) -> ([]Vec3, []Vec3, []u32) {
     triangle_count := len(indices) / 3
     new_vertices: [dynamic]Vec3
     normals: [dynamic]Vec3
@@ -211,6 +211,9 @@ generate_normals :: proc(vertices: []Vec3, indices: []u32) -> ([]Vec3, []Vec3, [
 
         raw_normal := linalg.cross(a - b, b - c)
         normal := linalg.normalize(raw_normal * math.sign(linalg.dot(raw_normal, a)))
+        if !sphere && normal.y < 0 {
+            normal = -normal
+        }
 
         first := cast(u32)len(new_vertices)
         append(&new_indices, first, first + 1, first + 2)
@@ -220,7 +223,7 @@ generate_normals :: proc(vertices: []Vec3, indices: []u32) -> ([]Vec3, []Vec3, [
     return new_vertices[:], normals[:], new_indices[:]
 }
 
-get_terrain :: proc(width, height : f32, segment_count : int) -> Model {
+get_terrain :: proc(width, height, amplitude: f32, segment_count: int) -> Model {
     corner := Vec3{-width/2, 0, -height/2}
     step := Vec3{width, 0, height} / f32(segment_count)
     vertices: [dynamic]Vec3
@@ -235,6 +238,7 @@ get_terrain :: proc(width, height : f32, segment_count : int) -> Model {
         vec = linalg.normalize(vec)
     }
     max_value: f32 = 0
+    min_value: f32 = 10000000
     for i in 0..<vertex_count {
         for j in 0..<vertex_count {
             projection := step * {f32(i), 0, f32(j)}
@@ -246,7 +250,7 @@ get_terrain :: proc(width, height : f32, segment_count : int) -> Model {
             if grid_pos.z == 15 {
                 grid_pos.z = 14
             }
-            inner_pos := projection - grid_pos * grid_step
+            inner_pos := projection / grid_step - grid_pos
 
             a_vec := grid_vectors[int(grid_pos.x) + int(grid_pos.z) * 16]
             b_vec := grid_vectors[int(grid_pos.x + 1) + int(grid_pos.z) * 16]
@@ -258,30 +262,28 @@ get_terrain :: proc(width, height : f32, segment_count : int) -> Model {
             c := Vec3{grid_pos.x + 1, 0, grid_pos.z + 1} * grid_step
             d := Vec3{grid_pos.x, 0, grid_pos.z + 1} * grid_step
              
-            a_weight := linalg.dot(cast([2]f32)a_vec, (inner_pos - a).xz)
-            b_weight := linalg.dot(cast([2]f32)b_vec, (inner_pos - b).xz)
-            c_weight := linalg.dot(cast([2]f32)c_vec, (inner_pos - c).xz)
-            d_weight := linalg.dot(cast([2]f32)d_vec, (inner_pos - d).xz)
+            a_weight := linalg.dot(cast([2]f32)a_vec, inner_pos.xz)
+            b_weight := linalg.dot(cast([2]f32)b_vec, (inner_pos - Vec3{1, 0, 0}).xz)
+            c_weight := linalg.dot(cast([2]f32)c_vec, (inner_pos - Vec3{1, 0, 1}).xz)
+            d_weight := linalg.dot(cast([2]f32)d_vec, (inner_pos - Vec3{0, 0, 1}).xz)
 
             fade :: proc(x: f32) -> f32 {
                 return (6*x*x - 15*x + 10)*x*x*x
             }
 
-            u := fade(inner_pos.x / grid_step.x)
-            v := fade(inner_pos.z / grid_step.z)
+            u := fade(inner_pos.x)
+            v := fade(inner_pos.z)
             value := linalg.lerp(
                 linalg.lerp(a_weight, d_weight, v),
                 linalg.lerp(b_weight, c_weight, v),
                 u,
             )
-            projection.y = value
-            max_value = max(value, max_value)
+            projection.y = (value + 1) * amplitude / 2 // bc value is [-1; 1]
 
-            append(&vertices, projection)
+            append(&vertices, corner + projection)
         }
     }
     
-    fmt.println(max_value)
     indices: [dynamic]u32
     reserve(&indices, 6 * segment_count * segment_count)
     for row in 0..<segment_count {
@@ -302,7 +304,7 @@ get_terrain :: proc(width, height : f32, segment_count : int) -> Model {
     }
 
 
-    new_vertices, normals, new_indices := generate_normals(vertices[:], indices[:])    
+    new_vertices, normals, new_indices := generate_normals(vertices[:], indices[:], false)    
     delete(indices)
     delete(vertices)
 

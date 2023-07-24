@@ -34,7 +34,7 @@ in vec3 v_frag_position;
 
 void main()
 {
-    float ambient_strength = 0.45; 
+    float ambient_strength = 0.15; 
     float specular_strength = 0.15;
 
     vec4 diffuse_color = vec4(object_color, 1);
