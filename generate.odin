@@ -223,62 +223,74 @@ generate_normals :: proc(vertices: []Vec3, indices: []u32, sphere := true) -> ([
     return new_vertices[:], normals[:], new_indices[:]
 }
 
-get_terrain :: proc(width, height, amplitude: f32, segment_count: int) -> Model {
+@private
+grid_vectors: [256]Vec2
+@private
+grid_step: Vec2
+
+perlin_noise_init :: proc(seed: u64, plain_size: Vec2) {
+    grid_step = plain_size / 15
+    gen := rand.create(seed)
+    for &vec in grid_vectors {
+        vec.x = rand.float32(&gen)
+        vec.y = rand.float32(&gen)
+        vec = linalg.normalize(vec)
+    }
+}
+
+perlin_noise_get :: proc(point: Vec2) -> f32 {
+    grid_pos := linalg.floor(point / grid_step)
+    grid_x := int(grid_pos.x) % 15
+    grid_y := int(grid_pos.y) % 15
+
+    inner_pos := point / grid_step - grid_pos
+
+    a_vec := grid_vectors[grid_x + grid_y * 16]
+    b_vec := grid_vectors[grid_x + 1 + grid_y * 16]
+    c_vec := grid_vectors[grid_x + 1 + (grid_y + 1) * 16]
+    d_vec := grid_vectors[grid_x + (grid_y + 1) * 16]
+     
+    a_weight := linalg.dot(a_vec, inner_pos)
+    b_weight := linalg.dot(b_vec, inner_pos - Vec2{1, 0})
+    c_weight := linalg.dot(c_vec, inner_pos - Vec2{1, 1})
+    d_weight := linalg.dot(d_vec, inner_pos - Vec2{0, 1})
+
+    fade :: proc(x: f32) -> f32 {
+        return (6*x*x - 15*x + 10)*x*x*x
+    }
+
+    u := fade(inner_pos.x)
+    v := fade(inner_pos.y)
+    value := linalg.lerp(
+        linalg.lerp(a_weight, d_weight, v),
+        linalg.lerp(b_weight, c_weight, v),
+        u,
+    )
+    return value
+}
+
+get_terrain :: proc(width, height, amplitude: f32, segment_count: int, seed: u64) -> Model {
     corner := Vec3{-width/2, 0, -height/2}
     step := Vec3{width, 0, height} / f32(segment_count)
     vertices: [dynamic]Vec3
     vertex_count := segment_count + 1
     reserve(&vertices, vertex_count * vertex_count)
 
-    grid_vectors: [256]Vec2
-    grid_step := Vec3 {width / 15, 0, height / 15}
-    for &vec in grid_vectors {
-        vec.x = rand.float32()
-        vec.y = rand.float32()
-        vec = linalg.normalize(vec)
-    }
-    max_value: f32 = 0
-    min_value: f32 = 10000000
+    perlin_noise_init(seed, {4*width, 4*height})
     for i in 0..<vertex_count {
         for j in 0..<vertex_count {
             projection := step * {f32(i), 0, f32(j)}
 
-            grid_pos := linalg.floor(projection / grid_step)
-            if grid_pos.x == 15 {
-                grid_pos.x = 14
+            octave_count := 4
+            frequency: f32 = 2
+            persistence: f32 = 0.6
+            value: f32
+            for k in 0..<octave_count {
+                freq := math.pow(frequency, f32(k))
+                amp := amplitude *  math.pow(persistence, f32(k))
+                value += (perlin_noise_get(projection.xz * freq) + 1) * amp / 2 // bc value is [-1; 1]
             }
-            if grid_pos.z == 15 {
-                grid_pos.z = 14
-            }
-            inner_pos := projection / grid_step - grid_pos
-
-            a_vec := grid_vectors[int(grid_pos.x) + int(grid_pos.z) * 16]
-            b_vec := grid_vectors[int(grid_pos.x + 1) + int(grid_pos.z) * 16]
-            c_vec := grid_vectors[int(grid_pos.x + 1) + int(grid_pos.z + 1) * 16]
-            d_vec := grid_vectors[int(grid_pos.x) + int(grid_pos.z + 1) * 16]
-
-            a := Vec3{grid_pos.x, 0, grid_pos.z} * grid_step
-            b := Vec3{grid_pos.x + 1, 0, grid_pos.z} * grid_step
-            c := Vec3{grid_pos.x + 1, 0, grid_pos.z + 1} * grid_step
-            d := Vec3{grid_pos.x, 0, grid_pos.z + 1} * grid_step
-             
-            a_weight := linalg.dot(cast([2]f32)a_vec, inner_pos.xz)
-            b_weight := linalg.dot(cast([2]f32)b_vec, (inner_pos - Vec3{1, 0, 0}).xz)
-            c_weight := linalg.dot(cast([2]f32)c_vec, (inner_pos - Vec3{1, 0, 1}).xz)
-            d_weight := linalg.dot(cast([2]f32)d_vec, (inner_pos - Vec3{0, 0, 1}).xz)
-
-            fade :: proc(x: f32) -> f32 {
-                return (6*x*x - 15*x + 10)*x*x*x
-            }
-
-            u := fade(inner_pos.x)
-            v := fade(inner_pos.z)
-            value := linalg.lerp(
-                linalg.lerp(a_weight, d_weight, v),
-                linalg.lerp(b_weight, c_weight, v),
-                u,
-            )
-            projection.y = (value + 1) * amplitude / 2 // bc value is [-1; 1]
+            projection.y = value
 
             append(&vertices, corner + projection)
         }

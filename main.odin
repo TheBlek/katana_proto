@@ -264,7 +264,7 @@ renderer_draw_instance :: proc(renderer: $T/Renderer, camera: Camera, instance: 
     shader_set_uniform_matrix4(shader, "view", camera.camera_matrix)
     shader_set_uniform_matrix4(shader, "projection", camera.projection_matrix)
     shader_set_uniform_vec4(shader, "light_color", 1) 
-    shader_set_uniform_vec3(shader, "light_position", Vec3{0, 4, 0})
+    shader_set_uniform_vec3(shader, "light_position", Vec3{0, 10, 0})
     shader_set_uniform_vec3(shader, "viewer_position", camera.transform.position)
     if _, textured := instance.texture_data.(TextureData); !textured {
         shader_set_uniform_vec3(shader, "object_color", instance.color)
@@ -325,7 +325,7 @@ main :: proc() {
         },
     }
     instance2 := Instance {
-        model = get_terrain(100, 100, 6, 200),
+        model = get_terrain(100, 100, 6, 200, 300),
         scale = 1,
         transform = Transform {
             position = Vec3{0, 0, 0},
