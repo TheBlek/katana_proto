@@ -325,7 +325,7 @@ main :: proc() {
         },
     }
     instance2 := Instance {
-        model = get_terrain(100, 100, 6, 200, 300),
+        model = get_terrain(100, 100, 6, 200, 1),
         scale = 1,
         transform = Transform {
             position = Vec3{0, 0, 0},

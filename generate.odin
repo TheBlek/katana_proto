@@ -276,14 +276,14 @@ get_terrain :: proc(width, height, amplitude: f32, segment_count: int, seed: u64
     vertex_count := segment_count + 1
     reserve(&vertices, vertex_count * vertex_count)
 
-    perlin_noise_init(seed, {4*width, 4*height})
+    perlin_noise_init(seed, {8*width, 8*height})
     for i in 0..<vertex_count {
         for j in 0..<vertex_count {
             projection := step * {f32(i), 0, f32(j)}
 
-            octave_count := 4
+            octave_count := 5
             frequency: f32 = 2
-            persistence: f32 = 0.6
+            persistence: f32 = 0.5
             value: f32
             for k in 0..<octave_count {
                 freq := math.pow(frequency, f32(k))
