@@ -58,16 +58,30 @@ calculate_projection_matrix :: proc(fov, near, far: f32) -> (projection_matrix: 
 }
 
 AABB :: struct {
-    position: Vec3,
-    scale: Vec3,
+    maximal: Vec3,
+    minimal: Vec3,
+}
+
+aabb_from_instance :: proc(using instance: Instance) -> AABB {
+    minimal: Vec3 = math.F32_MAX 
+    maximal: Vec3
+    
+    for vertex in model.vertices {
+        global := model_matrix * Vec4{vertex.x, vertex.y, vertex.z, 1}
+        for i in 0..<3 {
+            minimal[i] = min(minimal[i], global[i])
+            maximal[i] = max(maximal[i], global[i])
+        }
+    }
+    return AABB { maximal, minimal } 
 }
 
 collide :: proc(a, b: AABB) -> bool {
-    a_min := a.position - a.scale / 2
-    a_max := a.position + a.scale / 2
+    a_min := a.minimal 
+    a_max := a.maximal
     
-    b_min := b.position - b.scale / 2
-    b_max := b.position + b.scale / 2
+    b_min := b.minimal 
+    b_max := b.maximal
     return a_max.x >= b_min.x && b_max.x >= a_min.x &&
         a_max.y >= b_min.y && b_max.y >= a_min.y &&
         a_max.z >= b_min.z && b_max.z >= a_min.z
@@ -161,7 +175,7 @@ main :: proc() {
         angle += increment
         instance1.transform.rotation = linalg.matrix3_from_euler_angle_x(angle)
         instance_update(&instance1)
-        result := collide(AABB{cube1.transform.position, cube1.scale}, AABB{cube2.transform.position, cube2.scale})
+        result := collide(aabb_from_instance(cube1), aabb_from_instance(cube2))
         if !result {
             cube1.transform.position.y -= gravity_step
             instance_update(&cube1)
