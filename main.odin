@@ -57,6 +57,11 @@ calculate_projection_matrix :: proc(fov, near, far: f32) -> (projection_matrix: 
     return
 }
 
+Sphere :: struct {
+    center: Vec3,
+    radius: f32,
+}
+
 AABB :: struct {
     maximal: Vec3,
     minimal: Vec3,
@@ -76,7 +81,11 @@ aabb_from_instance :: proc(using instance: Instance) -> AABB {
     return AABB { maximal, minimal } 
 }
 
-collide :: proc(a, b: AABB) -> bool {
+collide_sphere_sphere :: proc(a, b: Sphere) -> bool {
+    return linalg.length(a.center - b.center) <= a.radius + b.radius
+}
+
+collide_aabb_aabb :: proc(a, b: AABB) -> bool {
     a_min := a.minimal 
     a_max := a.maximal
     
@@ -86,6 +95,8 @@ collide :: proc(a, b: AABB) -> bool {
         a_max.y >= b_min.y && b_max.y >= a_min.y &&
         a_max.z >= b_min.z && b_max.z >= a_min.z
 }
+
+collide :: proc{ collide_aabb_aabb, collide_sphere_sphere }
 
 WIDTH :: 1280
 HEIGHT :: 720
@@ -130,7 +141,7 @@ main :: proc() {
         },
     }
     instance_update(&instance1)
-    instance2 := Instance {
+    terrain := Instance {
         model = get_terrain(100, 100, 6, 200, 1),
         scale = 1,
         transform = Transform {
@@ -139,47 +150,47 @@ main :: proc() {
         },
         color = {0.659, 0.392, 0.196},
     }
-    instance_update(&instance2)
+    instance_update(&terrain)
 
-    cube1 := Instance {
-        model = UNIT_CUBE,
-        scale = 1,
+    obj1 := Instance {
+        model = UNIT_SPHERE,
+        scale = 2,
         transform = Transform {
-            position = {2, 15, 0},
+            position = {3, 15, 0},
             rotation = linalg.MATRIX3F32_IDENTITY,
         },
         color = {1, 0, 0},
     }
-    instance_update(&cube1)
-
-    cube2 := Instance {
-        model = UNIT_CUBE,
+    instance_update(&obj1)
+    obj2 := Instance {
+        model = UNIT_SPHERE,
         scale = 1,
         transform = Transform {
-            position = {2, 9, 0},
+            position = {2, 8, 0},
             rotation = linalg.MATRIX3F32_IDENTITY,
         },
         color = {1, 0, 0},
     }
-    instance_update(&cube2)
+    instance_update(&obj2)
 
     increment: f32 = 0
     angle: f32 = 0
     prev_key_state: map[i32]i32
     prev_mouse_pos: Vec2
     pitch, yaw: f32
-    mouse_sensitivity:f32 = 0 
-    gravity_step: f32 = 0.01
+    mouse_sensitivity:f32 = 0.01
+    gravity_step: f32 = 0.02
     for !glfw.WindowShouldClose(window) { // Render
         // Game logic
         angle += increment
         instance1.transform.rotation = linalg.matrix3_from_euler_angle_x(angle)
         instance_update(&instance1)
-        result := collide(aabb_from_instance(cube1), aabb_from_instance(cube2))
+        result := collide(Sphere{obj1.transform.position, 2} , Sphere{obj2.transform.position, 1})
         if !result {
-            cube1.transform.position.y -= gravity_step
-            instance_update(&cube1)
+            obj1.transform.position.y -= gravity_step
+            instance_update(&obj1)
         }
+        fmt.println(obj1.transform.position)
 
         // Input
         e_state := glfw.GetKey(window, glfw.KEY_E)
@@ -229,9 +240,9 @@ main :: proc() {
         // Rendering
         gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
         renderer_draw_instance(renderer, camera, &instance1)
-        renderer_draw_instance(renderer, camera, &instance2)
-        renderer_draw_instance(renderer, camera, &cube1)
-        renderer_draw_instance(renderer, camera, &cube2)
+        renderer_draw_instance(renderer, camera, &terrain)
+        renderer_draw_instance(renderer, camera, &obj1)
+        renderer_draw_instance(renderer, camera, &obj2)
         glfw.SwapBuffers(window)
         
         glfw.PollEvents()
