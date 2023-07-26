@@ -81,8 +81,33 @@ aabb_from_instance :: proc(using instance: Instance) -> AABB {
     return AABB { maximal, minimal } 
 }
 
+aabb_closest_point :: proc(aabb: AABB, point: Vec3) -> Vec3 {
+    result := point
+    for i in 0..<3 {
+        result[i] = clamp(result[i], aabb.minimal[i], aabb.maximal[i])
+    }
+    return result
+}
+
+aabb_closest_point_dist2 :: proc(aabb: AABB, point: Vec3) -> f32 {
+    result: f32 = 0
+    for i in 0..<3 {
+        if point[i] < aabb.minimal[i] {
+            result += (point[i] - aabb.minimal[i]) * (point[i] - aabb.minimal[i])
+        }
+        if point[i] > aabb.maximal[i] {
+            result += (aabb.maximal[i] - point[i]) * (aabb.maximal[i] - point[i])
+        }
+    }
+    return result
+}
+
+collide_sphere_aabb :: proc(a: Sphere, b: AABB) -> bool {
+    return aabb_closest_point_dist2(b, a.center) <= a.radius * a.radius
+}
+
 collide_sphere_sphere :: proc(a, b: Sphere) -> bool {
-    return linalg.length(a.center - b.center) <= a.radius + b.radius
+    return linalg.length2(a.center - b.center) <= (a.radius + b.radius) * (a.radius + b.radius)
 }
 
 collide_aabb_aabb :: proc(a, b: AABB) -> bool {
@@ -96,7 +121,7 @@ collide_aabb_aabb :: proc(a, b: AABB) -> bool {
         a_max.z >= b_min.z && b_max.z >= a_min.z
 }
 
-collide :: proc{ collide_aabb_aabb, collide_sphere_sphere }
+collide :: proc{ collide_aabb_aabb, collide_sphere_sphere, collide_sphere_aabb }
 
 WIDTH :: 1280
 HEIGHT :: 720
@@ -153,8 +178,8 @@ main :: proc() {
     instance_update(&terrain)
 
     obj1 := Instance {
-        model = UNIT_SPHERE,
-        scale = 2,
+        model = UNIT_CUBE,
+        scale = {1, 0.1, 1},
         transform = Transform {
             position = {3, 15, 0},
             rotation = linalg.MATRIX3F32_IDENTITY,
@@ -185,12 +210,12 @@ main :: proc() {
         angle += increment
         instance1.transform.rotation = linalg.matrix3_from_euler_angle_x(angle)
         instance_update(&instance1)
-        result := collide(Sphere{obj1.transform.position, 2} , Sphere{obj2.transform.position, 1})
+        result := collide(Sphere{obj2.transform.position, 1}, aabb_from_instance(obj1))
         if !result {
             obj1.transform.position.y -= gravity_step
             instance_update(&obj1)
+            fmt.println(aabb_closest_point_dist2(aabb_from_instance(obj1), obj2.transform.position))
         }
-        fmt.println(obj1.transform.position)
 
         // Input
         e_state := glfw.GetKey(window, glfw.KEY_E)
