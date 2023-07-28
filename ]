@@ -125,8 +125,8 @@ collide_triangle_aabb :: proc(a: Triangle, b: AABB) -> bool {
 
     for i in 0..<3 {
         r := length.x * abs(edges[i].z) + length.z * abs(edges[i].x)
-        p0 := a.points[0].x * edges[i].z - a.points[0].z * edges[i].x
-        p2 := a.points[2].x * edges[i].z - a.points[2].z * edges[i].x
+        p0 := -a.points[0].y * edges[i].z + a.points[0].z * edges[i].y
+        p2 := -a.points[2].y * edges[i].z + a.points[2].z * edges[i].y
         if min(p0, p2) < -r || max(p0, p2) > r { // Separating axis found
             return false
         }
