@@ -17,6 +17,10 @@ VEC3_X :: linalg.VECTOR3F32_X_AXIS
 VEC3_Y :: linalg.VECTOR3F32_Y_AXIS
 VEC3_Z :: linalg.VECTOR3F32_Z_AXIS
 
+vec4_from_vec3 :: proc(vec: Vec3, w: f32) -> Vec4 {
+    return {vec.x, vec.y, vec.z, w}
+}
+
 Transform :: struct {
     position: Vec3,
     rotation: Mat3,
@@ -190,12 +194,34 @@ collide_aabb_aabb :: proc(a, b: AABB) -> bool {
         a_max.z >= b_min.z && b_max.z >= a_min.z
 }
 
+collide_instance_aabb :: proc(a: Instance, b: AABB) -> bool {
+    if !collide(aabb_from_instance(a), b) {
+        return false
+    }
+
+    triangle_count := len(a.indices) / 3
+    for i in 0..<triangle_count {
+        triangle := Triangle {
+            {
+                (a.model_matrix * vec4_from_vec3(a.vertices[a.indices[3 * i]], 1)).xyz,
+                (a.model_matrix * vec4_from_vec3(a.vertices[a.indices[3 * i + 1]], 1)).xyz,
+                (a.model_matrix * vec4_from_vec3(a.vertices[a.indices[3 * i + 2]], 1)).xyz,
+            }
+        }
+        if collide(triangle, b) {
+            return true
+        }
+    }
+    return false
+}
+
 collide :: proc{ 
     collide_aabb_aabb,
     collide_sphere_sphere,
     collide_sphere_aabb,
     collide_plane_aabb,
     collide_triangle_aabb,
+    collide_instance_aabb,
 }
 
 WIDTH :: 1280
@@ -270,10 +296,10 @@ main :: proc() {
         indices = {0, 1, 2},
     }
     obj2 := Instance {
-        model = triangle,
+        model = UNIT_CAPSULE,
         scale = 1,
         transform = Transform {
-            position = {2.3, 8, 0},
+            position = {2.2, 8, 0},
             rotation = linalg.MATRIX3F32_IDENTITY,//linalg.matrix3_from_euler_angle_z(f32(linalg.PI) / 4),
         },
         color = {1, 0, 0},
@@ -292,12 +318,7 @@ main :: proc() {
         angle += increment
         instance1.transform.rotation = linalg.matrix3_from_euler_angle_x(angle)
         instance_update(&instance1)
-        verts := [3]Vec3 { 
-            (obj2.model_matrix * Vec4 {triangle.vertices[0].x, triangle.vertices[0].y, triangle.vertices[0].z, 1}).xyz,
-            (obj2.model_matrix * Vec4 {triangle.vertices[1].x, triangle.vertices[1].y, triangle.vertices[1].z, 1}).xyz,
-            (obj2.model_matrix * Vec4 {triangle.vertices[2].x, triangle.vertices[2].y, triangle.vertices[2].z, 1}).xyz,
-        }
-        result := collide(Triangle{verts}, aabb_from_instance(obj1))
+        result := collide(obj2, aabb_from_instance(obj1))
         if !result {
             obj1.transform.position.y -= gravity_step
             instance_update(&obj1)
