@@ -130,9 +130,9 @@ collide_triangle_aabb :: proc(a: Triangle, b: AABB) -> bool {
     // a00 - a02
     for i in 0..<3 {
         r := length.y * abs(edges[i].z) + length.z * abs(edges[i].y)
-        p1 := -points[(2 + i) % 3].y * edges[i].z + points[(2 + i) % 3].z * edges[i].y
-        p2 := -points[(3 + i) % 3].y * edges[i].z + points[(3 + i) % 3].z * edges[i].y
-        if max(p1, p2) < -r || min(p1, p2) > r { // Separating axis found
+        p1 := -a.points[(2 + i) % 3].y * edges[i].z + a.points[(2 + i) % 3].z * edges[i].y
+        p2 := -a.points[(3 + i) % 3].y * edges[i].z + a.points[(3 + i) % 3].z * edges[i].y
+        if min(p1, p2) < -r || max(p1, p2) > r { // Separating axis found
             return false
         }
     }
@@ -140,9 +140,9 @@ collide_triangle_aabb :: proc(a: Triangle, b: AABB) -> bool {
     // a10 - a12
     for i in 0..<3 {
         r := length.x * abs(edges[i].z) + length.z * abs(edges[i].x)
-        p1 := points[(2 + i) % 3].x * edges[i].z - points[(2 + i) % 3].z * edges[i].x
-        p2 := points[(3 + i) % 3].x * edges[i].z - points[(3 + i) % 3].z * edges[i].x
-        if max(p1, p2) < -r || min(p1, p2) > r { // Separating axis found
+        p1 := a.points[(2 + i) % 3].x * edges[i].z - a.points[(2 + i) % 3].z * edges[i].x
+        p2 := a.points[(3 + i) % 3].x * edges[i].z - a.points[(3 + i) % 3].z * edges[i].x
+        if min(p1, p2) < -r || max(p1, p2) > r { // Separating axis found
             return false
         }
     }
@@ -150,17 +150,17 @@ collide_triangle_aabb :: proc(a: Triangle, b: AABB) -> bool {
     // a20 - a22
     for i in 0..<3 {
         r := length.x * abs(edges[i].y) + length.y * abs(edges[i].x)
-        p1 := -points[(2 + i) % 3].x * edges[i].y + points[(2 + i) % 3].y * edges[i].x
-        p2 := -points[(3 + i) % 3].x * edges[i].y + points[(3 + i) % 3].y * edges[i].x
-        if max(p1, p2) < -r || min(p1, p2) > r { // Separating axis found
+        p1 := -a.points[(2 + i) % 3].x * edges[i].y + a.points[(2 + i) % 3].y * edges[i].x
+        p2 := -a.points[(3 + i) % 3].x * edges[i].y + a.points[(3 + i) % 3].y * edges[i].x
+        if min(p1, p2) < -r || max(p1, p2) > r { // Separating axis found
             return false
         }
     }
 
     // AABB of a triangle test
     for i in 0..<3 {
-        if max(points[0][i], points[1][i], points[2][i]) < -length[i] ||
-            min(points[0][i], points[1][i], points[2][i]) > length[i] {
+        if max(a.points[0][i], a.points[1][i], a.points[2][i]) < -length[i] ||
+            min(a.points[0][i], a.points[1][i], a.points[2][i]) > length[i] {
             return false
         }
     }
@@ -263,18 +263,20 @@ main :: proc() {
     }
     instance_update(&obj1)
     triangle := Model {
-        vertices = {{0.5, 0, 0}, {0, 0.5, 0}, {0, 0, 0.5}},
+        vertices = {0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5},
         normals = {
+            linalg.sqrt(f32(3)), linalg.sqrt(f32(3)), linalg.sqrt(f32(3)),
+            linalg.sqrt(f32(3)), linalg.sqrt(f32(3)), linalg.sqrt(f32(3)),
             linalg.sqrt(f32(3)), linalg.sqrt(f32(3)), linalg.sqrt(f32(3)),
         },
         indices = {0, 1, 2},
     }
     obj2 := Instance {
-        model = triangle,
+        model = UNIT_CUBE,
         scale = 1,
         transform = Transform {
             position = {2.3, 8, 0},
-            rotation = linalg.MATRIX3F32_IDENTITY,//linalg.matrix3_from_euler_angle_z(f32(linalg.PI) / 4),
+            rotation = linalg.matrix3_from_euler_angle_z(f32(linalg.PI) / 4),
         },
         color = {1, 0, 0},
     }
@@ -292,12 +294,7 @@ main :: proc() {
         angle += increment
         instance1.transform.rotation = linalg.matrix3_from_euler_angle_x(angle)
         instance_update(&instance1)
-        verts := [3]Vec3 { 
-            (obj2.model_matrix * Vec4 {triangle.vertices[0].x, triangle.vertices[0].y, triangle.vertices[0].z, 1}).xyz,
-            (obj2.model_matrix * Vec4 {triangle.vertices[1].x, triangle.vertices[1].y, triangle.vertices[1].z, 1}).xyz,
-            (obj2.model_matrix * Vec4 {triangle.vertices[2].x, triangle.vertices[2].y, triangle.vertices[2].z, 1}).xyz,
-        }
-        result := collide(Triangle{verts}, aabb_from_instance(obj1))
+        result := collide(aabb_from_instance(obj2), aabb_from_instance(obj1))
         if !result {
             obj1.transform.position.y -= gravity_step
             instance_update(&obj1)
