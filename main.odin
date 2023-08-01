@@ -4,6 +4,7 @@ import "core:fmt"
 import "core:mem"
 import "core:math/linalg"
 import "core:math"
+import "core:time"
 import "vendor:glfw"
 import gl "vendor:OpenGL"
 
@@ -78,6 +79,12 @@ Triangle :: struct {
 Plane :: struct {
     normal: Vec3,
     d: f32,
+}
+
+plane_from_triangle :: proc(using t: Triangle) -> (p: Plane) {
+    p.normal = linalg.cross(points[1] - points[0], points[2] - points[1])
+    p.d = linalg.dot(p.normal, points[0])
+    return
 }
 
 aabb_from_instance :: proc(using instance: Instance) -> AABB {
@@ -168,11 +175,8 @@ collide_triangle_aabb :: proc(a: Triangle, b: AABB) -> bool {
             return false
         }
     }
-    plane: Plane
-    plane.normal = linalg.cross(edges[0], edges[1])
-    plane.d = linalg.dot(plane.normal, a.points[0])
 
-    return collide_plane_aabb(plane, b)
+    return collide_plane_aabb(plane_from_triangle(a), b)
 }
 
 collide_sphere_aabb :: proc(a: Sphere, b: AABB) -> bool {
@@ -195,7 +199,7 @@ collide_aabb_aabb :: proc(a, b: AABB) -> bool {
 }
 
 collide_instance_aabb :: proc(a: Instance, b: AABB) -> bool {
-    if !collide(aabb_from_instance(a), b) {
+    if !collide(b, aabb_from_instance(a)) {
         return false
     }
 
@@ -215,13 +219,129 @@ collide_instance_aabb :: proc(a: Instance, b: AABB) -> bool {
     return false
 }
 
+collide_triangle_triangle :: proc(a, b: Triangle) -> bool {
+    using linalg
+    a_plane := plane_from_triangle(a)
+    sdist: [3]f32
+    sdist[0] = dot(a_plane.normal, b.points[0]) - a_plane.d
+    sdist[1] = dot(a_plane.normal, b.points[1]) - a_plane.d
+    sdist[2] = dot(a_plane.normal, b.points[2]) - a_plane.d 
+    // Precision problems. Floating point arithmetic
+    if sdist[0] == 0 && sdist[1] == 0 && sdist[2] == 0 {
+        panic("Coplanar case is not handled")
+    }
+    if sdist[0] * sdist[1] > 0 && sdist[1] * sdist[2] > 0 { 
+        return false
+    }
+    b_plane := plane_from_triangle(b)
+
+    sdistb: [3]f32
+    sdistb[0] = dot(b_plane.normal, a.points[0]) - b_plane.d
+    sdistb[1] = dot(b_plane.normal, a.points[1]) - b_plane.d
+    sdistb[2] = dot(b_plane.normal, a.points[2]) - b_plane.d 
+    // Precision problems. Floating point arithmetic
+    if sdistb[0] == 0 && sdistb[1] == 0 && sdistb[2] == 0 {
+        panic("Coplanar case is not handled")
+    }
+    if sdistb[0] * sdistb[1] > 0 && sdistb[1] * sdistb[2] > 0 { 
+        return false
+    }
+
+    intersection_dir := cross(a_plane.normal, b_plane.normal)
+    projection_index: int
+    max_axis := max(intersection_dir.x, intersection_dir.y, intersection_dir.z)
+    if max_axis == intersection_dir.x {
+        projection_index = 0
+    } else if max_axis == intersection_dir.y {
+        projection_index = 1
+    } else if max_axis == intersection_dir.z {
+        projection_index = 2
+    }
+    t1, t2: f32
+    {
+        other_side_vertex: int
+        one_side_vertices: [2]int 
+        if sdist[0] * sdist[1] > 0 {
+            other_side_vertex = 2  
+            one_side_vertices = {0, 1}
+        } else if sdist[1] * sdist[2] > 0 {
+            other_side_vertex = 0
+            one_side_vertices = {1, 2}
+        } else {
+            other_side_vertex = 1
+            one_side_vertices = {0, 2}
+        }
+
+        proj := [3]f32{ 
+            a.points[0][projection_index],
+            a.points[1][projection_index],
+            a.points[2][projection_index],
+        }
+        v := one_side_vertices[0]
+        t1 = proj[v] + (proj[other_side_vertex] - proj[v]) * sdist[v] * (sdist[v] - sdist[other_side_vertex])
+        v = one_side_vertices[1]
+        t2 = proj[v] + (proj[other_side_vertex] - proj[v]) * sdist[v] * (sdist[v] - sdist[other_side_vertex])
+    }
+
+    t3, t4: f32
+    {
+        other_side_vertex: int
+        one_side_vertices: [2]int
+        if sdistb[0] * sdistb[1] > 0 {
+            other_side_vertex = 2  
+            one_side_vertices = {0, 1}
+        } else if sdistb[1] * sdistb[2] > 0 {
+            other_side_vertex = 0
+            one_side_vertices = {1, 2}
+        } else {
+            other_side_vertex = 1
+            one_side_vertices = {0, 2}
+        }
+
+        proj := [3]f32{ 
+            b.points[0][projection_index],
+            b.points[1][projection_index],
+            b.points[2][projection_index],
+        }
+        v := one_side_vertices[0]
+        t3 = proj[v] + (proj[other_side_vertex] - proj[v]) * sdistb[v] * (sdistb[v] - sdistb[other_side_vertex])
+        v = one_side_vertices[1]
+        t4 = proj[v] + (proj[other_side_vertex] - proj[v]) * sdistb[v] * (sdistb[v] - sdistb[other_side_vertex])
+    }
+    return (max(t1, t2) > t3 && t3 > min(t1, t2)) || (max(t1, t2) > t4 && t4 > min(t1, t2))
+}
+
+collide_instance_triangle :: proc(a: Instance, b: Triangle) -> bool {
+    if !collide(b, aabb_from_instance(a)) {
+        return false
+    }
+
+    triangle_count := len(a.indices) / 3
+    for i in 0..<triangle_count {
+        triangle := Triangle {
+            {
+                (a.model_matrix * vec4_from_vec3(a.vertices[a.indices[3 * i]], 1)).xyz,
+                (a.model_matrix * vec4_from_vec3(a.vertices[a.indices[3 * i + 1]], 1)).xyz,
+                (a.model_matrix * vec4_from_vec3(a.vertices[a.indices[3 * i + 2]], 1)).xyz,
+            }
+        }
+        if collide(triangle, b) {
+            return true
+        }
+    }
+    return false
+
+}
+
 collide :: proc{ 
     collide_aabb_aabb,
     collide_sphere_sphere,
     collide_sphere_aabb,
     collide_plane_aabb,
     collide_triangle_aabb,
+    collide_triangle_triangle,
     collide_instance_aabb,
+    collide_instance_triangle,
 }
 
 WIDTH :: 1280
@@ -278,16 +398,6 @@ main :: proc() {
     }
     instance_update(&terrain)
 
-    obj1 := Instance {
-        model = UNIT_CUBE,
-        scale = {1, 0.1, 1},
-        transform = Transform {
-            position = {3, 15, 0},
-            rotation = linalg.MATRIX3F32_IDENTITY,
-        },
-        color = {1, 0, 0},
-    }
-    instance_update(&obj1)
     triangle := Model {
         vertices = {{0.5, 0, 0}, {0, 0.5, 0}, {0, 0, 0.5}},
         normals = {
@@ -295,39 +405,56 @@ main :: proc() {
         },
         indices = {0, 1, 2},
     }
+
+    obj1 := Instance {
+        model = triangle,
+        scale = {1, 1, 1},
+        transform = Transform {
+            position = {2.2, 15, 0},
+            rotation = linalg.MATRIX3F32_IDENTITY,
+        },
+        color = {1, 0, 0},
+    }
+    instance_update(&obj1)
     obj2 := Instance {
-        model = UNIT_CAPSULE,
+        model = triangle,
         scale = 1,
         transform = Transform {
-            position = {2.2, 8, 0},
-            rotation = linalg.MATRIX3F32_IDENTITY,//linalg.matrix3_from_euler_angle_z(f32(linalg.PI) / 4),
+            position = {2, 8, 0},
+            rotation = linalg.matrix3_from_euler_angle_z(f32(linalg.PI) / 4),
         },
         color = {1, 0, 0},
     }
     instance_update(&obj2)
 
-    increment: f32 = 0
-    angle: f32 = 0
     prev_key_state: map[i32]i32
     prev_mouse_pos: Vec2
     pitch, yaw: f32
     mouse_sensitivity:f32 = 0.01
     gravity_step: f32 = 0.02
+    stopwatch: time.Stopwatch
+    pause := false
     for !glfw.WindowShouldClose(window) { // Render
+        time.stopwatch_reset(&stopwatch)
+        time.stopwatch_start(&stopwatch)
         // Game logic
-        angle += increment
-        instance1.transform.rotation = linalg.matrix3_from_euler_angle_x(angle)
-        instance_update(&instance1)
-        result := collide(obj2, aabb_from_instance(obj1))
-        if !result {
-            obj1.transform.position.y -= gravity_step
-            instance_update(&obj1)
+        if !pause {
+            verts := [3]Vec3 { 
+                (obj2.model_matrix * Vec4 {triangle.vertices[0].x, triangle.vertices[0].y, triangle.vertices[0].z, 1}).xyz,
+                (obj2.model_matrix * Vec4 {triangle.vertices[1].x, triangle.vertices[1].y, triangle.vertices[1].z, 1}).xyz,
+                (obj2.model_matrix * Vec4 {triangle.vertices[2].x, triangle.vertices[2].y, triangle.vertices[2].z, 1}).xyz,
+            }
+            result := collide(obj1, Triangle{verts})
+            if !result {
+                obj1.transform.position.y -= gravity_step
+                instance_update(&obj1)
+            }
         }
 
         // Input
         e_state := glfw.GetKey(window, glfw.KEY_E)
         if e_state == glfw.PRESS && prev_key_state[glfw.KEY_E] == glfw.RELEASE {
-            increment *= -1
+            pause = !pause
             fmt.println("Pressed e")
         }
         prev_key_state[glfw.KEY_E] = e_state
@@ -378,5 +505,7 @@ main :: proc() {
         glfw.SwapBuffers(window)
         
         glfw.PollEvents()
+        time.stopwatch_stop(&stopwatch)
+        fmt.println(time.stopwatch_duration(stopwatch))
     }
 }
