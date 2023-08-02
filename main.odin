@@ -82,8 +82,9 @@ Plane :: struct {
 }
 
 plane_from_triangle :: proc(using t: Triangle) -> (p: Plane) {
-    p.normal = linalg.cross(points[1] - points[0], points[2] - points[1])
-    p.d = linalg.dot(p.normal, points[0])
+    using linalg
+    p.normal = cross(points[1] - points[0], points[2] - points[1])
+    p.d = dot(p.normal, points[0])
     return
 }
 
@@ -221,26 +222,31 @@ collide_instance_aabb :: proc(a: Instance, b: AABB) -> bool {
 
 collide_triangle_triangle :: proc(a, b: Triangle) -> bool {
     using linalg
+    eps: f32 = 0.001
     a_plane := plane_from_triangle(a)
+    // Small normals can cause robustness problems
+    a_plane.normal = normalize(a_plane.normal)
     sdist: [3]f32
     sdist[0] = dot(a_plane.normal, b.points[0]) - a_plane.d
     sdist[1] = dot(a_plane.normal, b.points[1]) - a_plane.d
     sdist[2] = dot(a_plane.normal, b.points[2]) - a_plane.d 
     // Precision problems. Floating point arithmetic
-    if sdist[0] == 0 && sdist[1] == 0 && sdist[2] == 0 {
+    if abs(sdist[0]) < eps && abs(sdist[1]) < eps && abs(sdist[2]) < eps {
         panic("Coplanar case is not handled")
     }
     if sdist[0] * sdist[1] > 0 && sdist[1] * sdist[2] > 0 { 
         return false
     }
     b_plane := plane_from_triangle(b)
+    // Small normals can cause robustness problems
+    b_plane.normal = normalize(b_plane.normal)
 
     sdistb: [3]f32
     sdistb[0] = dot(b_plane.normal, a.points[0]) - b_plane.d
     sdistb[1] = dot(b_plane.normal, a.points[1]) - b_plane.d
     sdistb[2] = dot(b_plane.normal, a.points[2]) - b_plane.d 
     // Precision problems. Floating point arithmetic
-    if sdistb[0] == 0 && sdistb[1] == 0 && sdistb[2] == 0 {
+    if abs(sdistb[0]) < eps && abs(sdistb[1]) < eps && abs(sdistb[2]) < eps {
         panic("Coplanar case is not handled")
     }
     if sdistb[0] * sdistb[1] > 0 && sdistb[1] * sdistb[2] > 0 { 
@@ -249,12 +255,12 @@ collide_triangle_triangle :: proc(a, b: Triangle) -> bool {
 
     intersection_dir := cross(a_plane.normal, b_plane.normal)
     projection_index: int
-    max_axis := max(intersection_dir.x, intersection_dir.y, intersection_dir.z)
-    if max_axis == intersection_dir.x {
+    max_axis := max(abs(intersection_dir.x), abs(intersection_dir.y), abs(intersection_dir.z))
+    if max_axis == abs(intersection_dir.x) {
         projection_index = 0
-    } else if max_axis == intersection_dir.y {
+    } else if max_axis == abs(intersection_dir.y) {
         projection_index = 1
-    } else if max_axis == intersection_dir.z {
+    } else {
         projection_index = 2
     }
     t1, t2: f32
@@ -407,7 +413,7 @@ main :: proc() {
     }
 
     obj1 := Instance {
-        model = triangle,
+        model = UNIT_CAPSULE,
         scale = {1, 1, 1},
         transform = Transform {
             position = {2.2, 15, 0},
@@ -420,8 +426,8 @@ main :: proc() {
         model = triangle,
         scale = 1,
         transform = Transform {
-            position = {2, 8, 0},
-            rotation = linalg.matrix3_from_euler_angle_z(f32(linalg.PI) / 4),
+            position = {2, 8, -0.8},
+            rotation = linalg.MATRIX3F32_IDENTITY,//linalg.matrix3_from_euler_angle_z(f32(linalg.PI) / 4),
         },
         color = {1, 0, 0},
     }
@@ -506,6 +512,6 @@ main :: proc() {
         
         glfw.PollEvents()
         time.stopwatch_stop(&stopwatch)
-        fmt.println(time.stopwatch_duration(stopwatch))
+        // fmt.println(time.stopwatch_duration(stopwatch))
     }
 }
