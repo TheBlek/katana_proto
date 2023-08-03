@@ -81,6 +81,15 @@ Plane :: struct {
     d: f32,
 }
 
+Ray :: struct {
+    origin: Vec3,
+    direction: Vec3,
+}
+
+ray_from_points :: proc(from, to: Vec3) -> Ray {
+    return { from, linalg.normalize(to - from) }
+}
+
 plane_from_triangle :: proc(using t: Triangle) -> (p: Plane) {
     using linalg
     p.normal = cross(points[1] - points[0], points[2] - points[1])
@@ -355,6 +364,28 @@ collide :: proc{
     collide_instance_triangle,
 }
 
+collision_ray_sphere :: proc(ray: Ray, sphere: Sphere) -> Maybe(Vec3) {
+    centered_origin := ray.origin - sphere.center 
+    // Coeffs of quadratic equation
+    b := linalg.dot(ray.direction, centered_origin)
+    c := linalg.dot(centered_origin, centered_origin) - sphere.radius * sphere.radius
+    // If origin is outside sphere and ray pointing away
+    if c > 0 && b > 0 {
+        return nil
+    }
+    
+    discr := b*b - c
+    if discr < 0 {
+        return nil
+    }
+
+    t := -b - math.sqrt(discr)
+    if t < 0 {
+        t = 0
+    }
+    return ray.origin + t * ray.direction
+}
+
 WIDTH :: 1280
 HEIGHT :: 720
 
@@ -418,7 +449,7 @@ main :: proc() {
     }
 
     obj1 := Instance {
-        model = UNIT_CAPSULE,
+        model = UNIT_SPHERE,
         scale = {1, 1, 1},
         transform = Transform {
             position = {2.2, 15, 0},
@@ -459,6 +490,15 @@ main :: proc() {
             if !result {
                 obj1.transform.position.y -= gravity_step
                 instance_update(&obj1)
+            }
+
+            sphere := Sphere{ obj1.transform.position, 1 }
+            point1 := (disposition_matrix(camera.transform) * Vec4{0, 0, 0, 1}).xyz
+            point2 := (disposition_matrix(camera.transform) * Vec4{0, 0, -1, 1}).xyz
+            ray := ray_from_points(Vec3(point1), Vec3(point2))
+            if collision, ok := collision_ray_sphere(ray, sphere).(Vec3); ok {
+                fmt.println("Collision point: ", collision)
+                fmt.println("Position: ", obj1.transform.position)
             }
         }
 
