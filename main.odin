@@ -88,6 +88,13 @@ plane_from_triangle :: proc(using t: Triangle) -> (p: Plane) {
     return
 }
 
+plane_normalized_from_triangle :: proc(using t: Triangle) -> (p: Plane) {
+    using linalg
+    p.normal = normalize(cross(points[1] - points[0], points[2] - points[1]))
+    p.d = dot(p.normal, points[0])
+    return
+}
+
 aabb_from_instance :: proc(using instance: Instance) -> AABB {
     minimal: Vec3 = math.F32_MAX 
     maximal: Vec3
@@ -223,9 +230,8 @@ collide_instance_aabb :: proc(a: Instance, b: AABB) -> bool {
 collide_triangle_triangle :: proc(a, b: Triangle) -> bool {
     using linalg
     eps: f32 = 0.001
-    a_plane := plane_from_triangle(a)
     // Small normals can cause robustness problems
-    a_plane.normal = normalize(a_plane.normal)
+    a_plane := plane_normalized_from_triangle(a)
     sdist: [3]f32
     sdist[0] = dot(a_plane.normal, b.points[0]) - a_plane.d
     sdist[1] = dot(a_plane.normal, b.points[1]) - a_plane.d
@@ -237,9 +243,8 @@ collide_triangle_triangle :: proc(a, b: Triangle) -> bool {
     if sdist[0] * sdist[1] > 0 && sdist[1] * sdist[2] > 0 { 
         return false
     }
-    b_plane := plane_from_triangle(b)
     // Small normals can cause robustness problems
-    b_plane.normal = normalize(b_plane.normal)
+    b_plane := plane_normalized_from_triangle(b)
 
     sdistb: [3]f32
     sdistb[0] = dot(b_plane.normal, a.points[0]) - b_plane.d
