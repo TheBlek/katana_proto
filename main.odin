@@ -18,6 +18,8 @@ VEC3_X :: linalg.VECTOR3F32_X_AXIS
 VEC3_Y :: linalg.VECTOR3F32_Y_AXIS
 VEC3_Z :: linalg.VECTOR3F32_Z_AXIS
 
+EPS :: 0.001
+
 vec4_from_vec3 :: proc(vec: Vec3, w: f32) -> Vec4 {
     return {vec.x, vec.y, vec.z, w}
 }
@@ -238,7 +240,6 @@ collide_instance_aabb :: proc(a: Instance, b: AABB) -> bool {
 
 collide_triangle_triangle :: proc(a, b: Triangle) -> bool {
     using linalg
-    eps: f32 = 0.001
     // Small normals can cause robustness problems
     a_plane := plane_normalized_from_triangle(a)
     sdist: [3]f32
@@ -246,7 +247,7 @@ collide_triangle_triangle :: proc(a, b: Triangle) -> bool {
     sdist[1] = dot(a_plane.normal, b.points[1]) - a_plane.d
     sdist[2] = dot(a_plane.normal, b.points[2]) - a_plane.d 
     // Precision problems. Floating point arithmetic
-    if abs(sdist[0]) < eps && abs(sdist[1]) < eps && abs(sdist[2]) < eps {
+    if abs(sdist[0]) < EPS && abs(sdist[1]) < EPS && abs(sdist[2]) < EPS {
         panic("Coplanar case is not handled")
     }
     if sdist[0] * sdist[1] > 0 && sdist[1] * sdist[2] > 0 { 
@@ -260,7 +261,7 @@ collide_triangle_triangle :: proc(a, b: Triangle) -> bool {
     sdistb[1] = dot(b_plane.normal, a.points[1]) - b_plane.d
     sdistb[2] = dot(b_plane.normal, a.points[2]) - b_plane.d 
     // Precision problems. Floating point arithmetic
-    if abs(sdistb[0]) < eps && abs(sdistb[1]) < eps && abs(sdistb[2]) < eps {
+    if abs(sdistb[0]) < EPS && abs(sdistb[1]) < EPS && abs(sdistb[2]) < EPS {
         panic("Coplanar case is not handled")
     }
     if sdistb[0] * sdistb[1] > 0 && sdistb[1] * sdistb[2] > 0 { 
@@ -386,6 +387,31 @@ collision_ray_sphere :: proc(ray: Ray, sphere: Sphere) -> Maybe(Vec3) {
     return ray.origin + t * ray.direction
 }
 
+collision_ray_aabb :: proc(ray: Ray, aabb: AABB) -> Maybe(Vec3) {
+    tmin:f32 = 0
+    tmax:f32 = math.F32_MAX
+    for i in 0..<3 {
+        if abs(ray.direction[i]) < EPS {
+            if ray.origin[i] < aabb.minimal[i] || ray.origin[i] > aabb.maximal[i] {
+                return nil
+            }
+            continue
+        }
+        t0 := (aabb.minimal[i] - ray.origin[i]) / ray.direction[i]
+        t1 := (aabb.maximal[i] - ray.origin[i]) / ray.direction[i]
+        if t0 > t1 {
+            t0, t1 = t1, t0
+        }
+        tmin = max(tmin, t0)
+        tmax = min(tmax, t1)
+        if tmax < tmin {
+            return nil
+        }
+    }
+
+    return ray.origin + tmin * ray.direction
+}
+
 WIDTH :: 1280
 HEIGHT :: 720
 
@@ -449,7 +475,7 @@ main :: proc() {
     }
 
     obj1 := Instance {
-        model = UNIT_SPHERE,
+        model = UNIT_CUBE,
         scale = {1, 1, 1},
         transform = Transform {
             position = {2.2, 15, 0},
@@ -496,7 +522,7 @@ main :: proc() {
             point1 := (disposition_matrix(camera.transform) * Vec4{0, 0, 0, 1}).xyz
             point2 := (disposition_matrix(camera.transform) * Vec4{0, 0, -1, 1}).xyz
             ray := ray_from_points(Vec3(point1), Vec3(point2))
-            if collision, ok := collision_ray_sphere(ray, sphere).(Vec3); ok {
+            if collision, ok := collision_ray_aabb(ray, aabb_from_instance(obj1)).(Vec3); ok {
                 fmt.println("Collision point: ", collision)
                 fmt.println("Position: ", obj1.transform.position)
             }
