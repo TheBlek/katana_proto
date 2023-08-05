@@ -146,6 +146,16 @@ main :: proc() {
     }
     instance_update(&obj2)
 
+    pointer := Instance {
+        model = UNIT_SPHERE,
+        scale = 0.05,
+        transform = {
+            rotation = linalg.MATRIX3F32_IDENTITY,
+        },
+        color = {0, 0, 1},
+    }
+    instance_update(&pointer)
+
     prev_key_state: map[i32]i32
     prev_mouse_pos: Vec2
     pitch, yaw: f32
@@ -163,7 +173,8 @@ main :: proc() {
                 (obj2.model_matrix * Vec4 {triangle.vertices[1].x, triangle.vertices[1].y, triangle.vertices[1].z, 1}).xyz,
                 (obj2.model_matrix * Vec4 {triangle.vertices[2].x, triangle.vertices[2].y, triangle.vertices[2].z, 1}).xyz,
             }
-            result := collide(obj1, Triangle{verts})
+            tris := Triangle{verts, linalg.cross(verts[1] - verts[0], verts[2] - verts[0])}
+            result := collide(obj1, tris)
             if !result {
                 obj1.transform.position.y -= gravity_step
                 instance_update(&obj1)
@@ -172,9 +183,9 @@ main :: proc() {
             point1 := (disposition_matrix(camera.transform) * Vec4{0, 0, 0, 1}).xyz
             point2 := (disposition_matrix(camera.transform) * Vec4{0, 0, -1, 1}).xyz
             ray := ray_from_points(Vec3(point1), Vec3(point2))
-            if collision, ok := collision(ray, aabb_from_instance(obj1)).(Vec3); ok {
-                fmt.println("Collision point: ", collision)
-                fmt.println("Position: ", obj1.transform.position)
+            if collision, ok := collision(ray, tris).(Vec3); ok {
+                pointer.transform.position = collision
+                instance_update(&pointer)
             }
         }
 
@@ -229,6 +240,7 @@ main :: proc() {
         renderer_draw_instance(renderer, camera, &terrain)
         renderer_draw_instance(renderer, camera, &obj1)
         renderer_draw_instance(renderer, camera, &obj2)
+        renderer_draw_instance(renderer, camera, &pointer)
         glfw.SwapBuffers(window)
         
         glfw.PollEvents()
