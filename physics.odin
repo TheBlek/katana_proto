@@ -36,14 +36,14 @@ ray_from_points :: proc(from, to: Vec3) -> Ray {
 plane_from_triangle :: proc(using t: Triangle) -> (p: Plane) {
     using linalg
     p.normal = normal
-    p.d = dot(p.normal, points[0])
+    p.d = -dot(p.normal, points[0])
     return
 }
 
 plane_normalized_from_triangle :: proc(using t: Triangle) -> (p: Plane) {
     using linalg
     p.normal = normalize(normal)
-    p.d = dot(p.normal, points[0])
+    p.d = -dot(p.normal, points[0])
     return
 }
 
@@ -87,7 +87,7 @@ collide_plane_aabb :: proc(a: Plane, b: AABB) -> bool {
     length := (b.maximal - b.minimal) / 2;
 
     r := length.x * abs(a.normal.x) + length.y * abs(a.normal.y) + length.z * abs(a.normal.z)
-    dist := linalg.dot(a.normal, center) - a.d
+    dist := linalg.dot(a.normal, center) + a.d
     return abs(dist) <= r
 }
 
@@ -184,29 +184,30 @@ collide_triangle_triangle :: proc(a, b: Triangle) -> bool {
     using linalg
     // Small normals can cause robustness problems
     a_plane := plane_normalized_from_triangle(a)
-    sdist: [3]f32
-    sdist[0] = dot(a_plane.normal, b.points[0]) - a_plane.d
-    sdist[1] = dot(a_plane.normal, b.points[1]) - a_plane.d
-    sdist[2] = dot(a_plane.normal, b.points[2]) - a_plane.d 
-    // Precision problems. Floating point arithmetic
-    if abs(sdist[0]) < EPS && abs(sdist[1]) < EPS && abs(sdist[2]) < EPS {
-        panic("Coplanar case is not handled")
+    sdistb := [3]f32 {
+        dot(a_plane.normal, b.points[0]) + a_plane.d,
+        dot(a_plane.normal, b.points[1]) + a_plane.d,
+        dot(a_plane.normal, b.points[2]) + a_plane.d,
     }
-    if sdist[0] * sdist[1] > 0 && sdist[1] * sdist[2] > 0 { 
-        return false
-    }
-    // Small normals can cause robustness problems
-    b_plane := plane_normalized_from_triangle(b)
-
-    sdistb: [3]f32
-    sdistb[0] = dot(b_plane.normal, a.points[0]) - b_plane.d
-    sdistb[1] = dot(b_plane.normal, a.points[1]) - b_plane.d
-    sdistb[2] = dot(b_plane.normal, a.points[2]) - b_plane.d 
     // Precision problems. Floating point arithmetic
     if abs(sdistb[0]) < EPS && abs(sdistb[1]) < EPS && abs(sdistb[2]) < EPS {
         panic("Coplanar case is not handled")
     }
     if sdistb[0] * sdistb[1] > 0 && sdistb[1] * sdistb[2] > 0 { 
+        return false
+    }
+    // Small normals can cause robustness problems
+    b_plane := plane_normalized_from_triangle(b)
+    sdist := [3]f32 {
+        dot(b_plane.normal, a.points[0]) + b_plane.d,
+        dot(b_plane.normal, a.points[1]) + b_plane.d,
+        dot(b_plane.normal, a.points[2]) + b_plane.d,
+    }
+    // Precision problems. Floating point arithmetic
+    if abs(sdist[0]) < EPS && abs(sdist[1]) < EPS && abs(sdist[2]) < EPS {
+        panic("Coplanar case is not handled")
+    }
+    if sdist[0] * sdist[1] > 0 && sdist[1] * sdist[2] > 0 { 
         return false
     }
 
@@ -220,8 +221,8 @@ collide_triangle_triangle :: proc(a, b: Triangle) -> bool {
     } else {
         projection_index = 2
     }
-    t1, t2: f32
-    {
+    
+    find_interval :: proc(sdist: [3]f32, points: [3]Vec3, projection_index: int) -> (t1, t2: f32) {
         other_side_vertex: int
         one_side_vertices: [2]int 
         if sdist[0] * sdist[1] > 0 {
@@ -236,41 +237,19 @@ collide_triangle_triangle :: proc(a, b: Triangle) -> bool {
         }
 
         proj := [3]f32{ 
-            a.points[0][projection_index],
-            a.points[1][projection_index],
-            a.points[2][projection_index],
+            points[0][projection_index],
+            points[1][projection_index],
+            points[2][projection_index],
         }
         v := one_side_vertices[0]
-        t1 = proj[v] + (proj[other_side_vertex] - proj[v]) * sdist[v] * (sdist[v] - sdist[other_side_vertex])
+        t1 = proj[v] + (proj[other_side_vertex] - proj[v]) * sdist[v] / (sdist[v] - sdist[other_side_vertex])
         v = one_side_vertices[1]
-        t2 = proj[v] + (proj[other_side_vertex] - proj[v]) * sdist[v] * (sdist[v] - sdist[other_side_vertex])
+        t2 = proj[v] + (proj[other_side_vertex] - proj[v]) * sdist[v] / (sdist[v] - sdist[other_side_vertex])
+        return
     }
+    t1, t2 := find_interval(sdist, a.points, projection_index)
+    t3, t4 := find_interval(sdistb, b.points, projection_index)
 
-    t3, t4: f32
-    {
-        other_side_vertex: int
-        one_side_vertices: [2]int
-        if sdistb[0] * sdistb[1] > 0 {
-            other_side_vertex = 2  
-            one_side_vertices = {0, 1}
-        } else if sdistb[1] * sdistb[2] > 0 {
-            other_side_vertex = 0
-            one_side_vertices = {1, 2}
-        } else {
-            other_side_vertex = 1
-            one_side_vertices = {0, 2}
-        }
-
-        proj := [3]f32{ 
-            b.points[0][projection_index],
-            b.points[1][projection_index],
-            b.points[2][projection_index],
-        }
-        v := one_side_vertices[0]
-        t3 = proj[v] + (proj[other_side_vertex] - proj[v]) * sdistb[v] * (sdistb[v] - sdistb[other_side_vertex])
-        v = one_side_vertices[1]
-        t4 = proj[v] + (proj[other_side_vertex] - proj[v]) * sdistb[v] * (sdistb[v] - sdistb[other_side_vertex])
-    }
     return (max(t1, t2) > t3 && t3 > min(t1, t2)) || (max(t1, t2) > t4 && t4 > min(t1, t2))
 }
 
@@ -295,6 +274,28 @@ collide_instance_triangle :: proc(a: Instance, b: Triangle) -> bool {
     }
     return false
 
+}
+
+collide_instance_instance :: proc(a, b: Instance) -> bool {
+    if !collide(aabb_from_instance(a), aabb_from_instance(b)) {
+        return false
+    }
+
+    triangle_count := len(a.indices) / 3
+    for i in 0..<triangle_count {
+        triangle := Triangle {
+            {
+                (a.model_matrix * vec4_from_vec3(a.vertices[a.indices[3 * i]], 1)).xyz,
+                (a.model_matrix * vec4_from_vec3(a.vertices[a.indices[3 * i + 1]], 1)).xyz,
+                (a.model_matrix * vec4_from_vec3(a.vertices[a.indices[3 * i + 2]], 1)).xyz,
+            },
+            a.normal_matrix * a.normals[a.indices[3 * i]],
+        }
+        if collide(b, triangle) {
+            return true
+        }
+    }
+    return false
 }
 
 collide_ray_sphere :: proc(ray: Ray, sphere: Sphere) -> bool {
@@ -345,6 +346,7 @@ collide :: proc{
     collide_triangle_triangle,
     collide_instance_aabb,
     collide_instance_triangle,
+    collide_instance_instance,
     collide_ray_sphere,
     collide_ray_aabb,
 }

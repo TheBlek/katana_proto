@@ -136,7 +136,7 @@ main :: proc() {
     }
     instance_update(&obj1)
     obj2 := Instance {
-        model = triangle,
+        model = UNIT_CAPSULE,
         scale = 1,
         transform = Transform {
             position = {2, 8, -0.8},
@@ -174,19 +174,19 @@ main :: proc() {
                 (obj2.model_matrix * Vec4 {triangle.vertices[2].x, triangle.vertices[2].y, triangle.vertices[2].z, 1}).xyz,
             }
             tris := Triangle{verts, linalg.cross(verts[1] - verts[0], verts[2] - verts[0])}
-            result := collide(obj1, tris)
+            result := collide(obj1, obj2)
             if !result {
                 obj1.transform.position.y -= gravity_step
                 instance_update(&obj1)
             }
 
-            point1 := (disposition_matrix(camera.transform) * Vec4{0, 0, 0, 1}).xyz
-            point2 := (disposition_matrix(camera.transform) * Vec4{0, 0, -1, 1}).xyz
-            ray := ray_from_points(Vec3(point1), Vec3(point2))
-            if collision, ok := collision(ray, tris).(Vec3); ok {
-                pointer.transform.position = collision
-                instance_update(&pointer)
-            }
+            // point1 := (disposition_matrix(camera.transform) * Vec4{0, 0, 0, 1}).xyz
+            // point2 := (disposition_matrix(camera.transform) * Vec4{0, 0, -1, 1}).xyz
+            // ray := ray_from_points(Vec3(point1), Vec3(point2))
+            // if collision, ok := collision(ray, tris).(Vec3); ok {
+            //     pointer.transform.position = collision
+            //     instance_update(&pointer)
+            // }
         }
 
         // Input
