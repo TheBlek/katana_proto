@@ -155,7 +155,7 @@ main :: proc() {
         color = {0, 0, 1},
     }
     instance_update(&pointer)
-    append(&renderer.light_sources, PointLight { color = 1, constant = 1, linear = 0.09, quadratic = 0.032 } )
+    append(&renderer.light_sources, DirectionalLight { color = 1, direction = Vec3{1, 0, 0} } )
     light := &renderer.light_sources[0]
 
     prev_key_state: map[i32]i32
@@ -165,6 +165,7 @@ main :: proc() {
     gravity_step: f32 = 0.02
     stopwatch: time.Stopwatch
     pause := false
+    angle: f32 = 0
     for !glfw.WindowShouldClose(window) { // Render
         time.stopwatch_reset(&stopwatch)
         time.stopwatch_start(&stopwatch)
@@ -182,9 +183,6 @@ main :: proc() {
                 instance_update(&obj1)
             }
 
-            light.position.y += gravity_step
-            fmt.println(light.position)
-
             // point1 := (disposition_matrix(camera.transform) * Vec4{0, 0, 0, 1}).xyz
             // point2 := (disposition_matrix(camera.transform) * Vec4{0, 0, -1, 1}).xyz
             // ray := ray_from_points(Vec3(point1), Vec3(point2))
@@ -192,6 +190,9 @@ main :: proc() {
             //     pointer.transform.position = collision
             //     instance_update(&pointer)
             // }
+            angle += gravity_step
+            direction := linalg.matrix3_from_euler_angle_z(angle) * Vec3{1, 0, 0}
+            light.direction = direction
         }
 
         // Input

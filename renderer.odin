@@ -16,6 +16,12 @@ PointLight :: struct {
     quadratic: f32,
 }
 
+DirectionalLight :: struct {
+    direction: Vec3,
+    strength: f32,
+    color: Vec3,
+}
+
 RenderMode :: enum {
     Plain = 0,
     Textured = 1,
@@ -29,7 +35,7 @@ RenderModeData :: struct {
 
 Renderer :: struct($n: int) {
     modes: [n]RenderModeData,
-    light_sources: [dynamic]PointLight,
+    light_sources: [dynamic]DirectionalLight,
 }
 
 renderer_destroy :: proc(window: glfw.WindowHandle, _: Renderer(2)) {
@@ -154,10 +160,15 @@ renderer_draw_instance :: proc(renderer: $T/Renderer, camera: Camera, instance: 
     shader_set_uniform_matrix4(shader, "projection", camera.projection_matrix)
 
     shader_set_uniform_vec3(shader, "light_color", renderer.light_sources[0].color) 
-    shader_set_uniform_vec3(shader, "light_position", renderer.light_sources[0].position)
-    shader_set_uniform_f32(shader, "constant", renderer.light_sources[0].constant)
-    shader_set_uniform_f32(shader, "linear", renderer.light_sources[0].linear)
-    shader_set_uniform_f32(shader, "quadratic", renderer.light_sources[0].quadratic)
+    shader_set_uniform_vec4(shader, "light_vector", Vec4 {
+        renderer.light_sources[0].direction.x,
+        renderer.light_sources[0].direction.y,
+        renderer.light_sources[0].direction.z,
+        0,
+    })
+    // shader_set_uniform_f32(shader, "constant", renderer.light_sources[0].constant)
+    // shader_set_uniform_f32(shader, "linear", renderer.light_sources[0].linear)
+    // shader_set_uniform_f32(shader, "quadratic", renderer.light_sources[0].quadratic)
 
     shader_set_uniform_vec3(shader, "viewer_position", camera.transform.position)
     if _, textured := instance.texture_data.(TextureData); !textured {
