@@ -155,6 +155,8 @@ main :: proc() {
         color = {0, 0, 1},
     }
     instance_update(&pointer)
+    append(&renderer.light_sources, PointLight { color = 1, constant = 1, linear = 0.09, quadratic = 0.032 } )
+    light := &renderer.light_sources[0]
 
     prev_key_state: map[i32]i32
     prev_mouse_pos: Vec2
@@ -179,6 +181,9 @@ main :: proc() {
                 obj1.transform.position.y -= gravity_step
                 instance_update(&obj1)
             }
+
+            light.position.y += gravity_step
+            fmt.println(light.position)
 
             // point1 := (disposition_matrix(camera.transform) * Vec4{0, 0, 0, 1}).xyz
             // point2 := (disposition_matrix(camera.transform) * Vec4{0, 0, -1, 1}).xyz

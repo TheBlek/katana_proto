@@ -6,6 +6,16 @@ import "core:image/png"
 import "core:image"
 import "core:bytes"
 
+PointLight :: struct {
+    position: Vec3,
+    strength: f32,
+    color: Vec3,
+
+    constant: f32,
+    linear: f32,
+    quadratic: f32,
+}
+
 RenderMode :: enum {
     Plain = 0,
     Textured = 1,
@@ -19,6 +29,7 @@ RenderModeData :: struct {
 
 Renderer :: struct($n: int) {
     modes: [n]RenderModeData,
+    light_sources: [dynamic]PointLight,
 }
 
 renderer_destroy :: proc(window: glfw.WindowHandle, _: Renderer(2)) {
@@ -46,9 +57,9 @@ renderer_init :: proc() -> (glfw.WindowHandle, Renderer(2)) {
     assert(ok_plain, "Shader error. Aborting") 
 
     gl.UseProgram(textured_shader)
-    shader_set_uniform_1i(textured_shader, "u_texture", 0)
-    shader_set_uniform_1i(textured_shader, "u_diffuse", 1)
-    shader_set_uniform_1i(textured_shader, "u_specular", 2)
+    shader_set_uniform_i32(textured_shader, "u_texture", 0)
+    shader_set_uniform_i32(textured_shader, "u_diffuse", 1)
+    shader_set_uniform_i32(textured_shader, "u_specular", 2)
 
     textured_vao: u32
     gl.GenVertexArrays(1, &textured_vao)
@@ -90,7 +101,7 @@ renderer_init :: proc() -> (glfw.WindowHandle, Renderer(2)) {
     gl.BindVertexArray(0) // Unbind effectively
 
     renderer := Renderer(2) {
-        {
+        modes = {
             { vao=plain_vao, vbo=plain_vbo, shader=plain_shader },
             { vao=textured_vao, vbo=textured_vbo, shader=textured_shader },
         },
@@ -141,8 +152,13 @@ renderer_draw_instance :: proc(renderer: $T/Renderer, camera: Camera, instance: 
     shader_set_uniform_matrix3(shader, "normal_matrix", instance.normal_matrix)
     shader_set_uniform_matrix4(shader, "view", camera.camera_matrix)
     shader_set_uniform_matrix4(shader, "projection", camera.projection_matrix)
-    shader_set_uniform_vec4(shader, "light_color", 1) 
-    shader_set_uniform_vec3(shader, "light_position", Vec3{-2, 10, 2})
+
+    shader_set_uniform_vec3(shader, "light_color", renderer.light_sources[0].color) 
+    shader_set_uniform_vec3(shader, "light_position", renderer.light_sources[0].position)
+    shader_set_uniform_f32(shader, "constant", renderer.light_sources[0].constant)
+    shader_set_uniform_f32(shader, "linear", renderer.light_sources[0].linear)
+    shader_set_uniform_f32(shader, "quadratic", renderer.light_sources[0].quadratic)
+
     shader_set_uniform_vec3(shader, "viewer_position", camera.transform.position)
     if _, textured := instance.texture_data.(TextureData); !textured {
         shader_set_uniform_vec3(shader, "object_color", instance.color)

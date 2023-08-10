@@ -64,7 +64,12 @@ shader_set_uniform_vec3 :: proc(program: u32, name: cstring, vec: Vec3) {
     gl.Uniform3f(location, vec.x, vec.y, vec.z)
 }
 
-shader_set_uniform_1i :: proc(program: u32, name: cstring, value: i32) {
+shader_set_uniform_i32 :: proc(program: u32, name: cstring, value: i32) {
     location := gl.GetUniformLocation(program, name)
     gl.Uniform1i(location, value)
+}
+
+shader_set_uniform_f32 :: proc(program: u32, name: cstring, value: f32) {
+    location := gl.GetUniformLocation(program, name)
+    gl.Uniform1f(location, value)
 }
