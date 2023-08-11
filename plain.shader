@@ -29,6 +29,7 @@ uniform vec3 object_color;
 
 uniform vec3 light_color;
 uniform vec4 light_vector; // if w == 0 then ~light_direction else ~light_position
+uniform float light_strength;
 uniform float constant;
 uniform float linear;
 uniform float quadratic;
@@ -43,19 +44,18 @@ void main()
 
     vec4 diffuse_color = vec4(object_color, 1);
     vec4 ambient = ambient_strength * diffuse_color;
-    float attenuation;
+    float attenuation = light_strength;
     vec3 light_dir;
     if (light_vector.w == 1) {
         // Point light
         vec3 light_to_frag = light_vector.xyz - v_frag_position;
         float distance_to_light = length(light_to_frag);
 
-        attenuation = 1 / (constant + linear * distance_to_light + quadratic * distance_to_light * distance_to_light);
+        attenuation /= (constant + linear * distance_to_light + quadratic * distance_to_light * distance_to_light);
         
         light_dir = light_to_frag / distance_to_light; // Basicly normalizing while reusing calculations
     } else {
         // Directional light
-        attenuation = 1;
         light_dir = normalize(-light_vector.xyz);
     }
     vec4 diffuse = max(dot(light_dir, v_normal), 0) * diffuse_color;

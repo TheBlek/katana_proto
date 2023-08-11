@@ -166,6 +166,7 @@ renderer_draw_instance :: proc(renderer: $T/Renderer, camera: Camera, instance: 
         renderer.light_sources[0].direction.z,
         0,
     })
+    shader_set_uniform_f32(shader, "light_strength", renderer.light_sources[0].strength)
     // shader_set_uniform_f32(shader, "constant", renderer.light_sources[0].constant)
     // shader_set_uniform_f32(shader, "linear", renderer.light_sources[0].linear)
     // shader_set_uniform_f32(shader, "quadratic", renderer.light_sources[0].quadratic)

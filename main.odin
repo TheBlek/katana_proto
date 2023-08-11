@@ -155,7 +155,7 @@ main :: proc() {
         color = {0, 0, 1},
     }
     instance_update(&pointer)
-    append(&renderer.light_sources, DirectionalLight { color = 1, direction = Vec3{1, 0, 0} } )
+    append(&renderer.light_sources, DirectionalLight { strength = 0.5, color = 1, direction = Vec3{1, 0, 0} } )
     light := &renderer.light_sources[0]
 
     prev_key_state: map[i32]i32
@@ -190,7 +190,7 @@ main :: proc() {
             //     pointer.transform.position = collision
             //     instance_update(&pointer)
             // }
-            angle += gravity_step
+            angle += gravity_step * 0.2
             direction := linalg.matrix3_from_euler_angle_z(angle) * Vec3{1, 0, 0}
             light.direction = direction
         }
