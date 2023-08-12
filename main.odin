@@ -86,26 +86,25 @@ main :: proc() {
         camera_matrix = inverse(disposition_matrix(transform))
     }
 
-    m, ok_file := model_load_from_file("./resources/katana.gltf")
+    katana_model, ok_file := model_load_from_file("./resources/katana.gltf")
     assert(ok_file)
-    switch &t in m.texture_data {
+    switch &t in katana_model.texture_data {
         case TextureData:
             t.textures = {
-                { filename="./resources/katana_texture.png" },
                 { filename="./resources/katana_diffuse.png" },
                 { filename="./resources/katana_specular.png" },
             }
     }
 
-    instance1 := Instance {
-        model = m,
+    katana := Instance {
+        model = katana_model,
         scale = 0.5,
         transform = Transform {
             position = Vec3{-10, 2, 0},
             rotation = linalg.MATRIX3F32_IDENTITY,
         },
     }
-    instance_update(&instance1)
+    instance_update(&katana)
     terrain := Instance {
         model = get_terrain(100, 100, 6, 200, 1),
         scale = 1,
@@ -244,7 +243,7 @@ main :: proc() {
 
         // Rendering
         gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-        renderer_draw_instance(renderer, camera, &instance1)
+        renderer_draw_instance(renderer, camera, &katana)
         renderer_draw_instance(renderer, camera, &terrain)
         renderer_draw_instance(renderer, camera, &obj1)
         renderer_draw_instance(renderer, camera, &obj2)

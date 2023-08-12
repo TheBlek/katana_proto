@@ -66,9 +66,8 @@ renderer_init :: proc() -> (glfw.WindowHandle, Renderer(2)) {
     assert(ok_plain, "Shader error. Aborting") 
 
     gl.UseProgram(textured_shader)
-    shader_set_uniform_i32(textured_shader, "u_texture", 0)
-    shader_set_uniform_i32(textured_shader, "u_diffuse", 1)
-    shader_set_uniform_i32(textured_shader, "u_specular", 2)
+    shader_set_uniform_i32(textured_shader, "u_diffuse", 0)
+    shader_set_uniform_i32(textured_shader, "u_specular", 1)
 
     textured_vao: u32
     gl.GenVertexArrays(1, &textured_vao)
