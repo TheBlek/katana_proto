@@ -155,8 +155,9 @@ main :: proc() {
         color = {0, 0, 1},
     }
     instance_update(&pointer)
-    append(&renderer.light_sources, DirectionalLight { strength = 0.5, color = 1, direction = Vec3{1, 0, 0} } )
-    light := &renderer.light_sources[0]
+    renderer.dir_light = DirectionalLight { strength = 0.5, color = 1, direction = Vec3{1, 0, 0} }
+    append(&renderer.point_lights, PointLight { strength = 1, color = 1, constant = 1, linear = 0.09, quadratic = 0.032 })
+    light := &renderer.point_lights[0]
 
     prev_key_state: map[i32]i32
     prev_mouse_pos: Vec2
@@ -190,10 +191,11 @@ main :: proc() {
             //     pointer.transform.position = collision
             //     instance_update(&pointer)
             // }
-            angle += gravity_step * 0.2
+            angle += gravity_step 
             direction := linalg.matrix3_from_euler_angle_z(angle) * Vec3{1, 0, 0}
-            light.direction = direction
+            renderer.dir_light.direction = direction
         }
+        light.position.y += gravity_step
 
         // Input
         e_state := glfw.GetKey(window, glfw.KEY_E)

@@ -27,44 +27,65 @@ layout(location = 0) out vec4 o_color;
 uniform vec3 viewer_position;
 uniform vec3 object_color;
 
-uniform vec3 light_color;
-uniform vec4 light_vector; // if w == 0 then ~light_direction else ~light_position
-uniform float light_strength;
-uniform float constant;
-uniform float linear;
-uniform float quadratic;
+struct PointLight {
+    vec3 position;
+    
+    float constant;
+    float linear;
+    float quadratic;
+
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+};
+
+struct DirectionalLight {
+    vec3 direction;
+
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+};
+#define POINT_LIGHT_NUM 16
+
+uniform PointLight point_lights[POINT_LIGHT_NUM];
+uniform int point_light_count;
+uniform DirectionalLight dir_light;
 
 in vec3 v_normal;
 in vec3 v_frag_position;
 
+vec3 calculate_dir_light(vec3 view_dir) {
+    vec3 ambient = dir_light.ambient * object_color;
+    vec3 diffuse = dir_light.diffuse * max(dot(dir_light.direction, v_normal), 0) * object_color;
+    vec3 reflection = reflect(-dir_light.direction, v_normal);
+    vec3 specular = dir_light.specular * pow(max(dot(view_dir, reflection), 0), 32); // * specularity at fragment;
+    return (ambient + diffuse + specular);
+}
+
 void main()
 {
-    float ambient_strength = 0.15;
-    float specular_strength = 0.15;
-
-    vec4 diffuse_color = vec4(object_color, 1);
-    vec4 ambient = ambient_strength * diffuse_color;
-    float attenuation = light_strength;
-    vec3 light_dir;
-    if (light_vector.w == 1) {
-        // Point light
-        vec3 light_to_frag = light_vector.xyz - v_frag_position;
-        float distance_to_light = length(light_to_frag);
-
-        attenuation /= (constant + linear * distance_to_light + quadratic * distance_to_light * distance_to_light);
-        
-        light_dir = light_to_frag / distance_to_light; // Basicly normalizing while reusing calculations
-    } else {
-        // Directional light
-        light_dir = normalize(-light_vector.xyz);
-    }
-    vec4 diffuse = max(dot(light_dir, v_normal), 0) * diffuse_color;
-
-    vec3 reflection = reflect(-light_dir, v_normal);
+    vec3 res = vec3(0);
     vec3 view_dir = normalize(viewer_position - v_frag_position);
-    
-    vec4 specular = pow(max(dot(view_dir, reflection), 0), 32) * specular_strength * vec4(light_color, 1);
+    res = calculate_dir_light(view_dir);
 
-    o_color = (ambient + diffuse + specular) * attenuation;
+    for (int i = 0; i < point_light_count; i++) {
+        PointLight source = point_lights[i];
+
+        vec3 light_to_frag = source.position - v_frag_position;
+        float distance_to_light = length(light_to_frag);
+        vec3 light_dir = light_to_frag / distance_to_light; // Basicly normalizing while reusing length calculations
+
+        float attenuation = 1 / (source.constant + source.linear * distance_to_light 
+            + source.quadratic * distance_to_light * distance_to_light);
+
+        vec3 ambient = source.ambient * object_color;
+        vec3 diffuse = source.diffuse * max(dot(light_dir, v_normal), 0) * object_color;
+        vec3 reflection = reflect(-light_dir, v_normal);
+        vec3 specular = source.specular * pow(max(dot(view_dir, reflection), 0), 32); // * specularity at fragment;
+
+        res += (ambient + diffuse + specular) * attenuation;
+    }
+    o_color = vec4(res, 1);
 };
 

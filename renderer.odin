@@ -5,6 +5,8 @@ import gl "vendor:OpenGL"
 import "core:image/png"
 import "core:image"
 import "core:bytes"
+import "core:fmt"
+import "core:strings"
 
 PointLight :: struct {
     position: Vec3,
@@ -35,7 +37,8 @@ RenderModeData :: struct {
 
 Renderer :: struct($n: int) {
     modes: [n]RenderModeData,
-    light_sources: [dynamic]DirectionalLight,
+    dir_light: DirectionalLight,
+    point_lights: [dynamic]PointLight,
 }
 
 renderer_destroy :: proc(window: glfw.WindowHandle, _: Renderer(2)) {
@@ -159,17 +162,27 @@ renderer_draw_instance :: proc(renderer: $T/Renderer, camera: Camera, instance: 
     shader_set_uniform_matrix4(shader, "view", camera.camera_matrix)
     shader_set_uniform_matrix4(shader, "projection", camera.projection_matrix)
 
-    shader_set_uniform_vec3(shader, "light_color", renderer.light_sources[0].color) 
-    shader_set_uniform_vec4(shader, "light_vector", Vec4 {
-        renderer.light_sources[0].direction.x,
-        renderer.light_sources[0].direction.y,
-        renderer.light_sources[0].direction.z,
-        0,
-    })
-    shader_set_uniform_f32(shader, "light_strength", renderer.light_sources[0].strength)
-    // shader_set_uniform_f32(shader, "constant", renderer.light_sources[0].constant)
-    // shader_set_uniform_f32(shader, "linear", renderer.light_sources[0].linear)
-    // shader_set_uniform_f32(shader, "quadratic", renderer.light_sources[0].quadratic)
+    shader_set_uniform_vec3(shader, "dir_light.direction", renderer.dir_light.direction)
+    shader_set_uniform_vec3(shader, "dir_light.ambient", renderer.dir_light.color * renderer.dir_light.strength)
+    shader_set_uniform_vec3(shader, "dir_light.diffuse", renderer.dir_light.color * renderer.dir_light.strength)
+    shader_set_uniform_vec3(shader, "dir_light.specular", renderer.dir_light.color * renderer.dir_light.strength)
+
+    shader_set_uniform_i32(shader, "point_light_count", cast(i32)len(renderer.point_lights))
+    for source, i in renderer.point_lights {
+        name :: proc(i: int, field: string) -> cstring {
+            return strings.unsafe_string_to_cstring(fmt.aprintf("point_lights[%d].%s\x00", i, field))
+        }
+        source := renderer.point_lights[i]
+        
+        shader_set_uniform_vec3(shader, name(i, "position"), source.position)
+        shader_set_uniform_vec3(shader, name(i, "ambient"), source.color * source.strength)
+        shader_set_uniform_vec3(shader, name(i, "diffuse"), source.color * source.strength)
+        shader_set_uniform_vec3(shader, name(i, "specular"), source.color * source.strength)
+
+        shader_set_uniform_f32(shader, name(i, "constant"), source.constant)
+        shader_set_uniform_f32(shader, name(i, "linear"), source.linear)
+        shader_set_uniform_f32(shader, name(i, "quadratic"), source.quadratic)
+    }
 
     shader_set_uniform_vec3(shader, "viewer_position", camera.transform.position)
     if _, textured := instance.texture_data.(TextureData); !textured {
