@@ -30,10 +30,16 @@ Ray :: struct {
 }
 
 ray_from_points :: proc(from, to: Vec3) -> Ray {
+    when INSTRUMENT {
+       stats.physics.conversion.ray_from_points += 1 
+    }
     return { from, linalg.normalize(to - from) }
 }
 
 plane_from_triangle :: proc(using t: Triangle) -> (p: Plane) {
+    when INSTRUMENT {
+       stats.physics.conversion.plane_from_triangle += 1 
+    }
     using linalg
     p.normal = normal
     p.d = -dot(p.normal, points[0])
@@ -41,6 +47,9 @@ plane_from_triangle :: proc(using t: Triangle) -> (p: Plane) {
 }
 
 plane_normalized_from_triangle :: proc(using t: Triangle) -> (p: Plane) {
+    when INSTRUMENT {
+       stats.physics.conversion.plane_from_triangle_normalized += 1 
+    }
     using linalg
     p.normal = normalize(normal)
     p.d = -dot(p.normal, points[0])
@@ -48,6 +57,9 @@ plane_normalized_from_triangle :: proc(using t: Triangle) -> (p: Plane) {
 }
 
 aabb_from_instance :: proc(using instance: Instance) -> AABB {
+    when INSTRUMENT {
+       stats.physics.conversion.aabb_from_instance += 1 
+    }
     minimal: Vec3 = math.F32_MAX 
     maximal: Vec3
     
@@ -83,6 +95,9 @@ aabb_closest_point_dist2 :: proc(aabb: AABB, point: Vec3) -> f32 {
 }
 
 collide_plane_aabb :: proc(a: Plane, b: AABB) -> bool {
+    when INSTRUMENT {
+       stats.physics.collision.plane_aabb_test += 1 
+    }
     center := (b.maximal + b.minimal) / 2;
     length := (b.maximal - b.minimal) / 2;
 
@@ -92,6 +107,9 @@ collide_plane_aabb :: proc(a: Plane, b: AABB) -> bool {
 }
 
 collide_triangle_aabb :: proc(a: Triangle, b: AABB) -> bool {
+    when INSTRUMENT {
+       stats.physics.collision.triangle_aabb_test += 1 
+    }
     center := (b.maximal + b.minimal) / 2;
     length := (b.maximal - b.minimal) / 2;
 
@@ -140,14 +158,23 @@ collide_triangle_aabb :: proc(a: Triangle, b: AABB) -> bool {
 }
 
 collide_sphere_aabb :: proc(a: Sphere, b: AABB) -> bool {
+    when INSTRUMENT {
+       stats.physics.collision.sphere_aabb_test += 1 
+    }
     return aabb_closest_point_dist2(b, a.center) <= a.radius * a.radius
 }
 
 collide_sphere_sphere :: proc(a, b: Sphere) -> bool {
+    when INSTRUMENT {
+       stats.physics.collision.sphere_sphere_test += 1 
+    }
     return linalg.length2(a.center - b.center) <= (a.radius + b.radius) * (a.radius + b.radius)
 }
 
 collide_aabb_aabb :: proc(a, b: AABB) -> bool {
+    when INSTRUMENT {
+       stats.physics.collision.aabb_aabb_test += 1 
+    }
     a_min := a.minimal 
     a_max := a.maximal
     
@@ -159,7 +186,10 @@ collide_aabb_aabb :: proc(a, b: AABB) -> bool {
 }
 
 collide_instance_aabb :: proc(a: Instance, b: AABB) -> bool {
-    if !collide(b, aabb_from_instance(a)) {
+    when INSTRUMENT {
+       stats.physics.collision.instance_aabb_test += 1 
+    }
+    if !collide_aabb_aabb(b, a.aabb) {
         return false
     }
 
@@ -173,7 +203,7 @@ collide_instance_aabb :: proc(a: Instance, b: AABB) -> bool {
             },
             a.normal_matrix * a.normals[a.indices[3 * i]],
         }
-        if collide(triangle, b) {
+        if collide_triangle_aabb(triangle, b) {
             return true
         }
     }
@@ -181,6 +211,9 @@ collide_instance_aabb :: proc(a: Instance, b: AABB) -> bool {
 }
 
 collide_triangle_triangle :: proc(a, b: Triangle) -> bool {
+    when INSTRUMENT {
+       stats.physics.collision.triangle_triangle_test += 1 
+    }
     using linalg
     // Small normals can cause robustness problems
     a_plane := plane_normalized_from_triangle(a)
@@ -254,7 +287,10 @@ collide_triangle_triangle :: proc(a, b: Triangle) -> bool {
 }
 
 collide_instance_triangle :: proc(a: Instance, b: Triangle) -> bool {
-    if !collide(b, aabb_from_instance(a)) {
+    when INSTRUMENT {
+       stats.physics.collision.instance_triangle_test += 1 
+    }
+    if !collide_triangle_aabb(b, a.aabb) {
         return false
     }
 
@@ -268,7 +304,7 @@ collide_instance_triangle :: proc(a: Instance, b: Triangle) -> bool {
             },
             a.normal_matrix * a.normals[a.indices[3 * i]],
         }
-        if collide(triangle, b) {
+        if collide_triangle_triangle(triangle, b) {
             return true
         }
     }
@@ -277,7 +313,10 @@ collide_instance_triangle :: proc(a: Instance, b: Triangle) -> bool {
 }
 
 collide_instance_instance :: proc(a, b: Instance) -> bool {
-    if !collide(aabb_from_instance(a), aabb_from_instance(b)) {
+    when INSTRUMENT {
+       stats.physics.collision.instance_instance_test += 1 
+    }
+    if !collide_aabb_aabb(a.aabb, b.aabb) {
         return false
     }
 
@@ -291,7 +330,7 @@ collide_instance_instance :: proc(a, b: Instance) -> bool {
             },
             a.normal_matrix * a.normals[a.indices[3 * i]],
         }
-        if collide(b, triangle) {
+        if collide_instance_triangle(b, triangle) {
             return true
         }
     }
@@ -299,6 +338,9 @@ collide_instance_instance :: proc(a, b: Instance) -> bool {
 }
 
 collide_ray_sphere :: proc(ray: Ray, sphere: Sphere) -> bool {
+    when INSTRUMENT {
+       stats.physics.collision.ray_sphere_test += 1 
+    }
     centered_origin := ray.origin - sphere.center 
     // Coeffs of quadratic equation
     b := linalg.dot(ray.direction, centered_origin)
@@ -313,6 +355,9 @@ collide_ray_sphere :: proc(ray: Ray, sphere: Sphere) -> bool {
 }
 
 collide_ray_aabb :: proc(ray: Ray, aabb: AABB) -> bool {
+    when INSTRUMENT {
+       stats.physics.collision.ray_aabb_test += 1 
+    }
     tmin:f32 = 0
     tmax:f32 = math.F32_MAX
     for i in 0..<3 {
@@ -352,6 +397,9 @@ collide :: proc{
 }
 
 collision_ray_sphere :: proc(ray: Ray, sphere: Sphere) -> Maybe(Vec3) {
+    when INSTRUMENT {
+       stats.physics.collision.ray_sphere += 1 
+    }
     centered_origin := ray.origin - sphere.center 
     // Coeffs of quadratic equation
     b := linalg.dot(ray.direction, centered_origin)
@@ -374,6 +422,9 @@ collision_ray_sphere :: proc(ray: Ray, sphere: Sphere) -> Maybe(Vec3) {
 }
 
 collision_ray_aabb :: proc(ray: Ray, aabb: AABB) -> Maybe(Vec3) {
+    when INSTRUMENT {
+       stats.physics.collision.ray_aabb += 1 
+    }
     tmin:f32 = 0
     tmax:f32 = math.F32_MAX
     for i in 0..<3 {
@@ -399,6 +450,9 @@ collision_ray_aabb :: proc(ray: Ray, aabb: AABB) -> Maybe(Vec3) {
 }
 
 collision_ray_triangle :: proc(using ray: Ray, using t: Triangle) -> Maybe(Vec3) {
+    when INSTRUMENT {
+       stats.physics.collision.ray_triangle += 1 
+    }
     using linalg
     d := dot(-direction, normal)
 

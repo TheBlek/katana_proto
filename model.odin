@@ -34,6 +34,7 @@ Instance :: struct {
     model_matrix: Mat4,
     normal_matrix: Mat3,
     color: Vec3,
+    aabb: AABB, // TODO: decouple physics and render geometry
 }
 
 UNIT_CUBE :: Model {
@@ -161,6 +162,7 @@ instance_data :: proc(using camera: Camera, instance: Instance) -> (data: [dynam
 instance_update :: proc(using instance: ^Instance) {
     model_matrix = disposition_matrix(transform) * scale_matrix(scale)
     normal_matrix = linalg.matrix3_from_matrix4(inverse_transpose(model_matrix))
+    aabb = aabb_from_instance(instance^)
 }
 
 model_load_from_file :: proc(path: string) -> (model: Model, ok := true) {

@@ -19,6 +19,8 @@ VEC3_Z :: linalg.VECTOR3F32_Z_AXIS
 
 EPS :: 0.001
 
+INSTRUMENT :: true
+
 vec4_from_vec3 :: proc(vec: Vec3, w: f32) -> Vec4 {
     return {vec.x, vec.y, vec.z, w}
 }
@@ -150,11 +152,11 @@ main :: proc() {
                 (obj2.model_matrix * Vec4 {triangle.vertices[2].x, triangle.vertices[2].y, triangle.vertices[2].z, 1}).xyz,
             }
             tris := Triangle{verts, linalg.cross(verts[1] - verts[0], verts[2] - verts[0])}
-            result := collide(obj1, obj2)
-            if !result {
-                obj1.transform.position.y -= gravity_step
-                instance_update(&obj1)
-            }
+            // result := collide(obj1, obj2)
+            // if !result {
+            //     obj1.transform.position.y -= gravity_step
+            //     instance_update(&obj1)
+            // }
 
             // point1 := (disposition_matrix(camera.transform) * Vec4{0, 0, 0, 1}).xyz
             // point2 := (disposition_matrix(camera.transform) * Vec4{0, 0, -1, 1}).xyz
@@ -192,10 +194,11 @@ main :: proc() {
                 step := transform.rotation * movement
                 player.transform.position += step 
                 res := collide(player^, terrain)
-                fmt.println(player.transform, transform, res)
+                // fmt.println(player.transform, transform, res)
                 if !res {
                     transform.position += step
                     camera_matrix = inverse(disposition_matrix(transform))
+                    fmt.println("instance update!")
                     instance_update(player)
                 } else {
                     player.transform.position -= step
@@ -236,6 +239,9 @@ main :: proc() {
         
         glfw.PollEvents()
         time.stopwatch_stop(&stopwatch)
-        fmt.println(time.stopwatch_duration(stopwatch))
+        when INSTRUMENT {
+            fmt.println(time.stopwatch_duration(stopwatch), stats)
+            stats = {}
+        }
     }
 }
