@@ -41,9 +41,7 @@ main :: proc() {
     camera := Camera {
         fov = 70,
         transform = Transform {
-            rotation = linalg.MATRIX3F32_IDENTITY,
-            position = Vec3{0, 10, 25},
-        },
+            rotation = linalg.MATRIX3F32_IDENTITY, position = Vec3{0, 10, 25}, },
         near = 0.1,
         far = 1000,
     }
@@ -198,7 +196,6 @@ main :: proc() {
                 if !res {
                     transform.position += step
                     camera_matrix = inverse(disposition_matrix(transform))
-                    fmt.println("instance update!")
                     instance_update(player)
                 } else {
                     player.transform.position -= step

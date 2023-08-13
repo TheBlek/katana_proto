@@ -1,4 +1,6 @@
 package main
+import "core:time"
+import "core:fmt"
 
 stats: Stats
 
@@ -6,31 +8,61 @@ Stats :: struct {
    physics: PhysicsStats,
 }
 
+StatType :: enum {
+    PhysicsConversion,
+    PhysicsCollision,
+    PhysicsCollisionTest,
+}
+
 PhysicsStats :: struct {
-    conversion: PhysicsConversionStats,
-    collision: PhysicsCollisionStats,
+    conversion: map[string]ProcedureStats,
+    collision: map[string]ProcedureStats,
+    collision_test: map[string]ProcedureStats,
 }
 
-PhysicsConversionStats :: struct {
-    plane_from_triangle: int,
-    plane_from_triangle_normalized: int,
-    aabb_from_instance: int,
-    ray_from_points: int,
+ProcedureStats :: struct {
+    call_count: int,
+    total_duration: time.Duration,
 }
 
-PhysicsCollisionStats :: struct {
-    plane_aabb_test: int,
-    triangle_aabb_test: int,
-    sphere_aabb_test: int,
-    sphere_sphere_test: int,
-    aabb_aabb_test: int,
-    instance_aabb_test: int,
-    triangle_triangle_test: int,
-    instance_triangle_test: int,
-    instance_instance_test: int,
-    ray_sphere_test: int,
-    ray_aabb_test: int,
-    ray_aabb: int,
-    ray_sphere: int,
-    ray_triangle: int,
+@(deferred_out=stop_instrument_proc)
+instrument_proc :: proc(
+    type: StatType,
+    loc := #caller_location,
+) -> (
+    sw: ^time.Stopwatch,
+    stat: ^ProcedureStats,
+) {
+    when INSTRUMENT {
+        group: ^map[string]ProcedureStats
+        switch type {
+            case .PhysicsConversion:
+                group = &stats.physics.conversion
+            case .PhysicsCollision:
+                group = &stats.physics.collision
+            case .PhysicsCollisionTest:
+                group = &stats.physics.collision_test
+        }
+        ok: bool
+        if stat, ok = &group[loc.procedure]; ok {
+            stat.call_count += 1
+        } else {
+            group[loc.procedure] = { call_count = 1 }
+            stat = &group[loc.procedure]
+        }
+        sw = new(time.Stopwatch)
+        time.stopwatch_start(sw)
+    }
+    return
+}
+
+stop_instrument_proc :: proc(
+    sw: ^time.Stopwatch,
+    stat: ^ProcedureStats,
+) {
+    when INSTRUMENT {
+        time.stopwatch_stop(sw)
+        stat.total_duration += time.stopwatch_duration(sw^)
+    }
+    return
 }
