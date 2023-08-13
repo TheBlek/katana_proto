@@ -28,41 +28,6 @@ Transform :: struct {
     rotation: Mat3,
 }
 
-Camera :: struct {
-    fov: f32,
-    near: f32,
-    far: f32,
-    transform: Transform,
-    projection_matrix: linalg.Matrix4f32,
-    camera_matrix: linalg.Matrix4f32,
-}
-
-// left, right, bottom, top, near, far
-calculate_projection_matrix_full :: proc(l, r, b, t, n, f: f32) -> (projection_matrix: Mat4) {
-    projection_matrix = {
-        2 * n / (r - l),    0,                  (r + l) / (r - l),  0,
-        0,                  2 * n / (t - b),    (t + b) / (t - b),  0,
-        0,                  0,                  -(f + n) / (f - n), -2 * f * n / (f - n),
-        0,                  0,                  -1,                 0,
-    }
-    return
-}
-
-calculate_projection_matrix :: proc(fov, near, far: f32) -> (projection_matrix: Mat4) {
-    fov := math.to_radians(fov)
-    aspect_ratio: f32 = f32(WIDTH) / HEIGHT
-
-    width := 2 * near * math.tan(fov/2)
-    height := width / aspect_ratio
-    projection_matrix = {
-        2 * near / width,   0,                  0,                              0,
-        0,                  2 * near / height,  0,                              0,
-        0,                  0,                  -(far + near) / (far - near),   -2 * far * near / (far - near),
-        0,                  0,                  -1,                             0,
-    }
-    return
-}
-
 WIDTH :: 1280
 HEIGHT :: 720
 
@@ -154,8 +119,16 @@ main :: proc() {
         color = {0, 0, 1},
     }
     instance_update(&pointer)
-    renderer.dir_light = DirectionalLight { strength = 0.5, color = 1, direction = Vec3{1, 0, 0} }
-    append(&renderer.point_lights, PointLight { strength = 1, color = 1, constant = 1, linear = 0.09, quadratic = 0.032 })
+
+    player := Instance {
+        model = UNIT_CAPSULE,
+        scale = 1,
+        transform = camera.transform,
+    }
+    instance_update(&player)
+
+    renderer.dir_light = DirectionalLight { strength = 0.1, color = 1, direction = Vec3{1, 0, 0} }
+    append(&renderer.point_lights, PointLight { strength = 1, color = Vec3{1, 1, 0}, constant = 1, linear = 0.09, quadratic = 0.032 })
     light := &renderer.point_lights[0]
 
     prev_key_state: map[i32]i32
@@ -192,7 +165,7 @@ main :: proc() {
             // }
             angle += gravity_step 
             direction := linalg.matrix3_from_euler_angle_z(angle) * Vec3{1, 0, 0}
-            renderer.dir_light.direction = direction
+            // renderer.dir_light.direction = direction
         }
         light.position.y += gravity_step
 
@@ -210,22 +183,33 @@ main :: proc() {
             key: i32,
             camera: ^Camera,
             movement: Vec3,
+            player: ^Instance,
+            terrain: Instance,
         ) {
             state := glfw.GetKey(window, key)
             if state == glfw.PRESS {
                 using camera
-                transform.position += transform.rotation * movement
-                camera_matrix = inverse(disposition_matrix(transform))
+                step := transform.rotation * movement
+                player.transform.position += step 
+                res := collide(player^, terrain)
+                fmt.println(player.transform, transform, res)
+                if !res {
+                    transform.position += step
+                    camera_matrix = inverse(disposition_matrix(transform))
+                    instance_update(player)
+                } else {
+                    player.transform.position -= step
+                }
             }
             prev[key] = state
         }
         step:f32 = 0.05
-        camera_movement(window, &prev_key_state, glfw.KEY_W, &camera, -step * VEC3_Z)
-        camera_movement(window, &prev_key_state, glfw.KEY_S, &camera, step * VEC3_Z)
-        camera_movement(window, &prev_key_state, glfw.KEY_A, &camera, -step * VEC3_X)
-        camera_movement(window, &prev_key_state, glfw.KEY_D, &camera, step * VEC3_X)
-        camera_movement(window, &prev_key_state, glfw.KEY_LEFT_SHIFT, &camera, -step * VEC3_Y)
-        camera_movement(window, &prev_key_state, glfw.KEY_SPACE, &camera, step * VEC3_Y)
+        camera_movement(window, &prev_key_state, glfw.KEY_W, &camera, -step * VEC3_Z, &player, terrain)
+        camera_movement(window, &prev_key_state, glfw.KEY_S, &camera, step * VEC3_Z, &player, terrain)
+        camera_movement(window, &prev_key_state, glfw.KEY_A, &camera, -step * VEC3_X, &player, terrain)
+        camera_movement(window, &prev_key_state, glfw.KEY_D, &camera, step * VEC3_X, &player, terrain)
+        camera_movement(window, &prev_key_state, glfw.KEY_LEFT_SHIFT, &camera, -step * VEC3_Y, &player, terrain)
+        camera_movement(window, &prev_key_state, glfw.KEY_SPACE, &camera, step * VEC3_Y, &player, terrain)
 
         x, y := glfw.GetCursorPos(window)
         diff := Vec2{f32(x), f32(y)}  - prev_mouse_pos
@@ -252,6 +236,6 @@ main :: proc() {
         
         glfw.PollEvents()
         time.stopwatch_stop(&stopwatch)
-        // fmt.println(time.stopwatch_duration(stopwatch))
+        fmt.println(time.stopwatch_duration(stopwatch))
     }
 }

@@ -7,6 +7,42 @@ import "core:image"
 import "core:bytes"
 import "core:fmt"
 import "core:strings"
+import "core:math"
+
+Camera :: struct {
+    fov: f32,
+    near: f32,
+    far: f32,
+    transform: Transform,
+    projection_matrix: Mat4,
+    camera_matrix: Mat4,
+}
+
+// left, right, bottom, top, near, far
+calculate_projection_matrix_full :: proc(l, r, b, t, n, f: f32) -> (projection_matrix: Mat4) {
+    projection_matrix = {
+        2 * n / (r - l),    0,                  (r + l) / (r - l),  0,
+        0,                  2 * n / (t - b),    (t + b) / (t - b),  0,
+        0,                  0,                  -(f + n) / (f - n), -2 * f * n / (f - n),
+        0,                  0,                  -1,                 0,
+    }
+    return
+}
+
+calculate_projection_matrix :: proc(fov, near, far: f32) -> (projection_matrix: Mat4) {
+    fov := math.to_radians(fov)
+    aspect_ratio: f32 = f32(WIDTH) / HEIGHT
+
+    width := 2 * near * math.tan(fov/2)
+    height := width / aspect_ratio
+    projection_matrix = {
+        2 * near / width,   0,                  0,                              0,
+        0,                  2 * near / height,  0,                              0,
+        0,                  0,                  -(far + near) / (far - near),   -2 * far * near / (far - near),
+        0,                  0,                  -1,                             0,
+    }
+    return
+}
 
 PointLight :: struct {
     position: Vec3,
