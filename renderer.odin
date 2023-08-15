@@ -75,11 +75,39 @@ Renderer :: struct($n: int) {
     modes: [n]RenderModeData,
     dir_light: DirectionalLight,
     point_lights: [dynamic]PointLight,
+    models: [dynamic]Model,
 }
 
 renderer_destroy :: proc(window: glfw.WindowHandle, _: Renderer(2)) {
     glfw.Terminate()
     glfw.DestroyWindow(window)
+}
+
+instance_data :: proc(renderer: ^$T/Renderer, using camera: Camera, instance: Instance) -> (data: [dynamic]f32) {
+    model := &models[instance.model_id]
+    reserve(&data, 3*len(model.vertices))
+
+    assert(
+        len(model.vertices) == len(model.normals),
+        "Normals do not correspond with vertices correctly",
+    )
+
+    if texs, exists := model.texture_data.(TextureData); exists {
+        assert(
+            len(model.vertices) == len(texs.uvs),
+            "UVs do not correspond with vertices correctly",
+        )
+    }
+
+    for i in 0..<len(model.vertices) {
+        using model
+        append(&data, vertices[i].x, vertices[i].y, vertices[i].z)
+        append(&data, normals[i].x, normals[i].y, normals[i].z)
+        if t, ok := texture_data.(TextureData); ok {
+            append(&data, t.uvs[i].x, t.uvs[i].y)
+        }
+    }
+    return
 }
 
 @(deferred_out=renderer_destroy)
@@ -153,14 +181,14 @@ renderer_init :: proc() -> (glfw.WindowHandle, Renderer(2)) {
     return window, renderer
 }
 
-renderer_draw_instance :: proc(renderer: $T/Renderer, camera: Camera, instance: ^Instance) {
-    data := instance_data(camera, instance^)
+renderer_draw_instance :: proc(renderer: ^$T/Renderer, camera: Camera, instance: ^Instance) {
+    data := instance_data(renderer, camera, instance^)
     defer delete(data)
 
     shader: u32
     vao: u32
     vbo: u32
-    switch &tex_data in instance.texture_data {
+    switch &tex_data in models[instance.model_id].texture_data {
         case TextureData:
             shader = renderer.modes[RenderMode.Textured].shader
             vao = renderer.modes[RenderMode.Textured].vao
@@ -220,18 +248,19 @@ renderer_draw_instance :: proc(renderer: $T/Renderer, camera: Camera, instance: 
     }
 
     shader_set_uniform_vec3(shader, "viewer_position", camera.transform.position)
-    if _, textured := instance.texture_data.(TextureData); !textured {
+    if _, textured := models[instance.model_id].texture_data.(TextureData); !textured { // this sample is not needed
         shader_set_uniform_vec3(shader, "object_color", instance.color)
     }
     
+    model := &models[instance.model_id]
     gl.BindVertexArray(vao)
     gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
     gl.BufferData(gl.ARRAY_BUFFER, size_of(f32) * len(data), raw_data(data[:]), gl.DYNAMIC_DRAW)
     gl.BufferData(
         gl.ELEMENT_ARRAY_BUFFER,
-        size_of(u32) * len(instance.indices),
-        raw_data(instance.indices[:]),
+        size_of(u32) * len(model.indices),
+        raw_data(model.indices[:]),
         gl.DYNAMIC_DRAW,
     )
-    gl.DrawElements(gl.TRIANGLES, cast(i32) len(instance.indices), gl.UNSIGNED_INT, nil)
+    gl.DrawElements(gl.TRIANGLES, cast(i32) len(model.indices), gl.UNSIGNED_INT, nil)
 }

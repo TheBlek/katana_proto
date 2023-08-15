@@ -21,6 +21,14 @@ EPS :: 0.001
 
 INSTRUMENT :: true
 
+models: [dynamic]Model
+
+add_model :: proc(model: Model) -> (res: int) {
+    res = len(models)
+    append(&models, model)
+    return
+}
+
 vec4_from_vec3 :: proc(vec: Vec3, w: f32) -> Vec4 {
     return {vec.x, vec.y, vec.z, w}
 }
@@ -60,9 +68,10 @@ main :: proc() {
                 { filename="./resources/katana_specular.png" },
             }
     }
+    katana_model_id := add_model(katana_model)
 
     katana := Instance {
-        model = katana_model,
+        model_id = katana_model_id,
         scale = 0.5,
         transform = Transform {
             position = Vec3{-10, 2, 0},
@@ -70,8 +79,10 @@ main :: proc() {
         },
     }
     instance_update(&katana)
+
+    terrain_model_id := add_model(get_terrain(100, 100, 6, 200, 1))
     terrain := Instance {
-        model = get_terrain(100, 100, 6, 200, 1),
+        model_id = terrain_model_id,
         scale = 1,
         transform = Transform {
             position = Vec3{0, 0, 0},
@@ -89,8 +100,9 @@ main :: proc() {
         indices = {0, 1, 2},
     }
 
+    cube_id := add_model(UNIT_CUBE)
     obj1 := Instance {
-        model = UNIT_CUBE,
+        model_id = cube_id,
         scale = {1, 1, 1},
         transform = Transform {
             position = {2.2, 15, 0},
@@ -99,8 +111,10 @@ main :: proc() {
         color = {1, 0, 0},
     }
     instance_update(&obj1)
+
+    capsule_id := add_model(UNIT_CAPSULE)
     obj2 := Instance {
-        model = UNIT_CAPSULE,
+        model_id = capsule_id,
         scale = 1,
         transform = Transform {
             position = {2, 8, -0.8},
@@ -110,8 +124,9 @@ main :: proc() {
     }
     instance_update(&obj2)
 
+    sphere_id := add_model(UNIT_SPHERE)
     pointer := Instance {
-        model = UNIT_SPHERE,
+        model_id = sphere_id,
         scale = 0.05,
         transform = {
             rotation = linalg.MATRIX3F32_IDENTITY,
@@ -121,7 +136,7 @@ main :: proc() {
     instance_update(&pointer)
 
     player := Instance {
-        model = UNIT_CAPSULE,
+        model_id = capsule_id,
         scale = 1,
         transform = camera.transform,
     }
@@ -227,17 +242,17 @@ main :: proc() {
 
         // Rendering
         gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-        renderer_draw_instance(renderer, camera, &katana)
-        renderer_draw_instance(renderer, camera, &terrain)
-        renderer_draw_instance(renderer, camera, &obj1)
-        renderer_draw_instance(renderer, camera, &obj2)
-        renderer_draw_instance(renderer, camera, &pointer)
+        renderer_draw_instance(&renderer, camera, &katana)
+        renderer_draw_instance(&renderer, camera, &terrain)
+        renderer_draw_instance(&renderer, camera, &obj1)
+        renderer_draw_instance(&renderer, camera, &obj2)
+        renderer_draw_instance(&renderer, camera, &pointer)
         glfw.SwapBuffers(window)
         
         glfw.PollEvents()
         time.stopwatch_stop(&stopwatch)
         when INSTRUMENT {
-            fmt.println(time.stopwatch_duration(stopwatch), stats)
+            fmt.println(time.stopwatch_duration(stopwatch), stats.physics.collision_test["collide_triangle_triangle"])
             stats = {}
         }
     }

@@ -55,7 +55,7 @@ aabb_from_instance :: proc(using instance: Instance) -> AABB {
     minimal: Vec3 = math.F32_MAX 
     maximal: Vec3
     
-    for vertex in model.vertices {
+    for vertex in models[model_id].vertices {
         global := model_matrix * Vec4{vertex.x, vertex.y, vertex.z, 1}
         for i in 0..<3 {
             minimal[i] = min(minimal[i], global[i])
@@ -167,27 +167,31 @@ collide_aabb_aabb :: proc(a, b: AABB) -> bool {
         a_max.z >= b_min.z && b_max.z >= a_min.z
 }
 
+exists_triangle :: proc(a: Instance, condition: proc(Triangle, $T) -> bool, data: T) -> bool {
+    model := &models[a.model_id]
+    triangle_count := len(model.indices) / 3
+    for i in 0..<triangle_count {
+        triangle := Triangle {
+            {
+                (a.model_matrix * vec4_from_vec3(model.vertices[model.indices[3 * i]], 1)).xyz,
+                (a.model_matrix * vec4_from_vec3(model.vertices[model.indices[3 * i + 1]], 1)).xyz,
+                (a.model_matrix * vec4_from_vec3(model.vertices[model.indices[3 * i + 2]], 1)).xyz,
+            },
+            a.normal_matrix * model.normals[model.indices[3 * i]],
+        }
+        if condition(triangle, data) {
+            return true
+        }
+    }
+    return false
+}
+
 collide_instance_aabb :: proc(a: Instance, b: AABB) -> bool {
     instrument_proc(.PhysicsCollisionTest)
     if !collide_aabb_aabb(b, a.aabb) {
         return false
     }
-
-    triangle_count := len(a.indices) / 3
-    for i in 0..<triangle_count {
-        triangle := Triangle {
-            {
-                (a.model_matrix * vec4_from_vec3(a.vertices[a.indices[3 * i]], 1)).xyz,
-                (a.model_matrix * vec4_from_vec3(a.vertices[a.indices[3 * i + 1]], 1)).xyz,
-                (a.model_matrix * vec4_from_vec3(a.vertices[a.indices[3 * i + 2]], 1)).xyz,
-            },
-            a.normal_matrix * a.normals[a.indices[3 * i]],
-        }
-        if collide_triangle_aabb(triangle, b) {
-            return true
-        }
-    }
-    return false
+    return exists_triangle(a, collide_triangle_aabb, b)
 }
 
 collide_triangle_triangle :: proc(a, b: Triangle) -> bool {
@@ -234,17 +238,14 @@ collide_triangle_triangle :: proc(a, b: Triangle) -> bool {
     }
     
     find_interval :: proc(sdist: [3]f32, points: [3]Vec3, projection_index: int) -> (t1, t2: f32) {
-        other_side_vertex: int
-        one_side_vertices: [2]int 
+        other_side_vertex: int = 1
+        one_side_vertices: [2]int = {0, 2}
         if sdist[0] * sdist[1] > 0 {
-            other_side_vertex = 2  
-            one_side_vertices = {0, 1}
+            other_side_vertex = 2
+            one_side_vertices[1] = 1
         } else if sdist[1] * sdist[2] > 0 {
             other_side_vertex = 0
-            one_side_vertices = {1, 2}
-        } else {
-            other_side_vertex = 1
-            one_side_vertices = {0, 2}
+            one_side_vertices[0] = 1
         }
 
         proj := [3]f32{ 
@@ -270,22 +271,11 @@ collide_instance_triangle :: proc(a: Instance, b: Triangle) -> bool {
         return false
     }
 
-    triangle_count := len(a.indices) / 3
-    for i in 0..<triangle_count {
-        triangle := Triangle {
-            {
-                (a.model_matrix * vec4_from_vec3(a.vertices[a.indices[3 * i]], 1)).xyz,
-                (a.model_matrix * vec4_from_vec3(a.vertices[a.indices[3 * i + 1]], 1)).xyz,
-                (a.model_matrix * vec4_from_vec3(a.vertices[a.indices[3 * i + 2]], 1)).xyz,
-            },
-            a.normal_matrix * a.normals[a.indices[3 * i]],
-        }
-        if collide_triangle_triangle(triangle, b) {
-            return true
-        }
-    }
-    return false
+    return exists_triangle(a, collide_triangle_triangle, b)
+}
 
+collide_triangle_instance :: proc(a: Triangle, b: Instance) -> bool {
+    return collide_instance_triangle(b, a)
 }
 
 collide_instance_instance :: proc(a, b: Instance) -> bool {
@@ -294,21 +284,7 @@ collide_instance_instance :: proc(a, b: Instance) -> bool {
         return false
     }
 
-    triangle_count := len(a.indices) / 3
-    for i in 0..<triangle_count {
-        triangle := Triangle {
-            {
-                (a.model_matrix * vec4_from_vec3(a.vertices[a.indices[3 * i]], 1)).xyz,
-                (a.model_matrix * vec4_from_vec3(a.vertices[a.indices[3 * i + 1]], 1)).xyz,
-                (a.model_matrix * vec4_from_vec3(a.vertices[a.indices[3 * i + 2]], 1)).xyz,
-            },
-            a.normal_matrix * a.normals[a.indices[3 * i]],
-        }
-        if collide_instance_triangle(b, triangle) {
-            return true
-        }
-    }
-    return false
+    return exists_triangle(a, collide_triangle_instance, b)
 }
 
 collide_ray_sphere :: proc(ray: Ray, sphere: Sphere) -> bool {

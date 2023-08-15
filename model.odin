@@ -28,7 +28,7 @@ Model :: struct {
 }
 
 Instance :: struct {
-    using model: Model,
+    model_id: int,
     transform: Transform,
     scale: Vec3,
     model_matrix: Mat4,
@@ -131,32 +131,6 @@ scale_matrix :: proc(scale: Vec3) -> (result: Mat4) {
     result[2][2] = scale.z
     result[3][3] = 1
     return 
-}
-
-instance_data :: proc(using camera: Camera, instance: Instance) -> (data: [dynamic]f32) {
-    reserve(&data, 3*len(instance.vertices))
-
-    assert(
-        len(instance.vertices) == len(instance.normals),
-        "Normals do not correspond with vertices correctly",
-    )
-
-    if texs, exists := instance.texture_data.(TextureData); exists {
-        assert(
-            len(instance.vertices) == len(texs.uvs),
-            "UVs do not correspond with vertices correctly",
-        )
-    }
-
-    for i in 0..<len(instance.vertices) {
-        using instance
-        append(&data, vertices[i].x, vertices[i].y, vertices[i].z)
-        append(&data, normals[i].x, normals[i].y, normals[i].z)
-        if t, ok := instance.texture_data.(TextureData); ok {
-            append(&data, t.uvs[i].x, t.uvs[i].y)
-        }
-    }
-    return
 }
 
 instance_update :: proc(using instance: ^Instance) {
