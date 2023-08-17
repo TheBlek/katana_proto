@@ -287,6 +287,44 @@ collide_instance_instance :: proc(a, b: Instance) -> bool {
     return exists_triangle(a, collide_triangle_instance, b)
 }
 
+collide_instance_instance_partitioned :: proc(a, b: Instance, b_grid: PartitionGrid) -> bool {
+    instrument_proc(.PhysicsCollisionTest)
+    if !collide_aabb_aabb(a.aabb, b.aabb) {
+        return false
+    }
+
+    low_corner := Vec3 {
+        -f32(b_grid.grid_size.x) * b_grid.cell_size / 2, 
+        -f32(b_grid.grid_size.y) * b_grid.cell_size / 2, 
+        -f32(b_grid.grid_size.z) * b_grid.cell_size / 2,
+    }
+    for x in 0..<b_grid.grid_size.x {
+        for y in 0..<b_grid.grid_size.y {
+            aabb := AABB { 
+                maximal=low_corner + Vec3{f32(x+1), f32(y+1), f32(math.F32_MAX)} * b_grid.cell_size,
+                minimal=low_corner + Vec3{f32(x), f32(y), f32(math.F32_MIN)} * b_grid.cell_size,
+            }
+            if collide_instance_aabb(a, aabb) {
+                model := &models[b.model_id]
+                for i in b_grid.triangle_ids[x][y] {
+                    triangle := Triangle {
+                        {
+                            (b.model_matrix * vec4_from_vec3(model.vertices[model.indices[3 * i]], 1)).xyz,
+                            (b.model_matrix * vec4_from_vec3(model.vertices[model.indices[3 * i + 1]], 1)).xyz,
+                            (b.model_matrix * vec4_from_vec3(model.vertices[model.indices[3 * i + 2]], 1)).xyz,
+                        },
+                        b.normal_matrix * model.normals[model.indices[3 * i]],
+                    }
+                    if collide_instance_triangle(a, triangle) {
+                        return true
+                    }
+                }
+            }
+        }
+    }
+    return false
+}
+
 collide_ray_sphere :: proc(ray: Ray, sphere: Sphere) -> bool {
     instrument_proc(.PhysicsCollisionTest)
     centered_origin := ray.origin - sphere.center 
@@ -338,6 +376,7 @@ collide :: proc{
     collide_instance_aabb,
     collide_instance_triangle,
     collide_instance_instance,
+    collide_instance_instance_partitioned,
     collide_ray_sphere,
     collide_ray_aabb,
 }
@@ -424,4 +463,80 @@ collision :: proc{
     collision_ray_aabb,
     collision_ray_sphere,
     collision_ray_triangle,
+}
+
+PartitionGrid :: struct {
+    cell_size: f32,
+    grid_size: [3]int,
+    triangle_ids: [][][dynamic]int,
+}
+
+partition_grid_from_instance :: proc(cell_size: f32, grid_size: [3]int, instance: Instance) -> (grid: PartitionGrid) {
+    grid.cell_size = cell_size
+    grid.grid_size = grid_size
+
+    grid.triangle_ids = make([][][dynamic]int, grid_size.x)
+    for i in 0..<grid_size.x {
+        grid.triangle_ids[i] = make([][dynamic]int, grid_size.y)
+    }
+
+
+    // get grid cell by coordinates, test it and all surrounding
+
+    test_grid_cell :: proc(i: int, t: Triangle, grid: PartitionGrid, x, y: int, depth: int) {
+        low_corner := Vec3 {
+            -f32(grid.grid_size.x) * grid.cell_size / 2, 
+            -f32(grid.grid_size.y) * grid.cell_size / 2, 
+            -f32(grid.grid_size.z) * grid.cell_size / 2,
+        }
+     
+        aabb := AABB { 
+            maximal=low_corner + Vec3{f32(x+1), f32(y+1), f32(math.F32_MAX)} * grid.cell_size,
+            minimal=low_corner + Vec3{f32(x), f32(y), f32(math.F32_MIN)} * grid.cell_size,
+        }
+
+        if collide(t, aabb) {
+            append(&grid.triangle_ids[x][y], i)
+        }
+
+        if depth == 1 {
+            return
+        }
+
+        moves := [][2]int{
+            {1, 0},
+            {-1, 0},
+            {0, 1},
+            {0, -1},
+            {1, 1},
+            {-1, 1},
+            {1, -1},
+            {-1, -1},
+        }
+        for move in moves {
+            test_grid_cell(i, t, grid, x + move.x, y + move.y, depth - 1)
+        }
+    }
+
+    model := &models[instance.model_id]
+    triangle_count := len(model.indices) / 3
+    low_corner := Vec3 {
+        -f32(grid.grid_size.x) * grid.cell_size / 2, 
+        -f32(grid.grid_size.y) * grid.cell_size / 2, 
+        -f32(grid.grid_size.z) * grid.cell_size / 2,
+    }
+    for i in 0..<triangle_count {
+        triangle := Triangle {
+            {
+                (instance.model_matrix * vec4_from_vec3(model.vertices[model.indices[3 * i]], 1)).xyz,
+                (instance.model_matrix * vec4_from_vec3(model.vertices[model.indices[3 * i + 1]], 1)).xyz,
+                (instance.model_matrix * vec4_from_vec3(model.vertices[model.indices[3 * i + 2]], 1)).xyz,
+            },
+            instance.normal_matrix * model.normals[model.indices[3 * i]],
+        }
+        cell := (triangle.points[0].xy - low_corner.xy) / cell_size
+        test_grid_cell(i, triangle, grid, cast(int)cell.x, cast(int)cell.y, 1)
+        fmt.println("Done {}/{}")
+    }
+    return
 }

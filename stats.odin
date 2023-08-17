@@ -6,12 +6,18 @@ stats: Stats
 
 Stats :: struct {
    physics: PhysicsStats,
+   render: RenderStats,
 }
 
 StatType :: enum {
     PhysicsConversion,
     PhysicsCollision,
     PhysicsCollisionTest,
+    Render,
+}
+
+RenderStats :: struct {
+    draw: map[string]ProcedureStats,
 }
 
 PhysicsStats :: struct {
@@ -42,6 +48,8 @@ instrument_proc :: proc(
                 group = &stats.physics.collision
             case .PhysicsCollisionTest:
                 group = &stats.physics.collision_test
+            case .Render:
+                group = &stats.render.draw
         }
         ok: bool
         if stat, ok = &group[loc.procedure]; ok {

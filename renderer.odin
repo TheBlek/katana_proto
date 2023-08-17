@@ -84,6 +84,7 @@ renderer_destroy :: proc(window: glfw.WindowHandle, _: Renderer(2)) {
 }
 
 instance_data :: proc(renderer: ^$T/Renderer, using camera: Camera, instance: Instance) -> (data: [dynamic]f32) {
+    instrument_proc(.Render)
     model := &models[instance.model_id]
     reserve(&data, 3*len(model.vertices))
 
@@ -182,6 +183,7 @@ renderer_init :: proc() -> (glfw.WindowHandle, Renderer(2)) {
 }
 
 renderer_draw_instance :: proc(renderer: ^$T/Renderer, camera: Camera, instance: ^Instance) {
+    instrument_proc(.Render) 
     data := instance_data(renderer, camera, instance^)
     defer delete(data)
 

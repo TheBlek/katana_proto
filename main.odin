@@ -13,13 +13,31 @@ Vec4 :: linalg.Vector4f32
 Mat3 :: linalg.Matrix3f32
 Mat4 :: linalg.Matrix4f32
 
-VEC3_X :: linalg.VECTOR3F32_X_AXIS
-VEC3_Y :: linalg.VECTOR3F32_Y_AXIS
-VEC3_Z :: linalg.VECTOR3F32_Z_AXIS
+VEC3_X :: Vec3 {1, 0, 0} 
+VEC3_Y :: Vec3 {0, 1, 0}
+VEC3_Z :: Vec3 {0, 0, 1}
+
+VEC3_X_NEG :: Vec3 {-1, 0, 0} 
+VEC3_Y_NEG :: Vec3 {0, -1, 0}
+VEC3_Z_NEG :: Vec3 {0, 0, -1}
 
 EPS :: 0.001
 
 INSTRUMENT :: true
+
+MovementKeyBind :: struct {
+    key: i32,
+    vec: Vec3,
+}
+
+MOVEMENT_BINDS :: []MovementKeyBind {
+    { glfw.KEY_W, VEC3_Z_NEG },
+    { glfw.KEY_S, VEC3_Z },
+    { glfw.KEY_A, VEC3_X_NEG },
+    { glfw.KEY_D, VEC3_X },
+    { glfw.KEY_LEFT_SHIFT, VEC3_Y_NEG },
+    { glfw.KEY_SPACE, VEC3_Y },
+}
 
 models: [dynamic]Model
 
@@ -91,6 +109,7 @@ main :: proc() {
         color = {0.659, 0.392, 0.196},
     }
     instance_update(&terrain)
+    terrain_partition := partition_grid_from_instance(1, 101, terrain)
 
     triangle := Model {
         vertices = {{0.5, 0, 0}, {0, 0.5, 0}, {0, 0, 0.5}},
@@ -192,39 +211,24 @@ main :: proc() {
         }
         prev_key_state[glfw.KEY_E] = e_state
 
-        camera_movement :: proc(
-            window: glfw.WindowHandle,
-            prev: ^map[i32]i32,
-            key: i32,
-            camera: ^Camera,
-            movement: Vec3,
-            player: ^Instance,
-            terrain: Instance,
-        ) {
-            state := glfw.GetKey(window, key)
+        dt: f32 = 0.05
+        for bind in MOVEMENT_BINDS {
+            state := glfw.GetKey(window, bind.key)
             if state == glfw.PRESS {
-                using camera
-                step := transform.rotation * movement
+                step := camera.transform.rotation * (dt * bind.vec)
                 player.transform.position += step 
-                res := collide(player^, terrain)
+                res := collide(player, terrain, terrain_partition)
                 // fmt.println(player.transform, transform, res)
                 if !res {
-                    transform.position += step
-                    camera_matrix = inverse(disposition_matrix(transform))
-                    instance_update(player)
+                    camera.transform.position += step
+                    camera.camera_matrix = inverse(disposition_matrix(camera.transform))
+                    instance_update(&player)
                 } else {
                     player.transform.position -= step
                 }
             }
-            prev[key] = state
+            prev_key_state[bind.key] = state
         }
-        step:f32 = 0.05
-        camera_movement(window, &prev_key_state, glfw.KEY_W, &camera, -step * VEC3_Z, &player, terrain)
-        camera_movement(window, &prev_key_state, glfw.KEY_S, &camera, step * VEC3_Z, &player, terrain)
-        camera_movement(window, &prev_key_state, glfw.KEY_A, &camera, -step * VEC3_X, &player, terrain)
-        camera_movement(window, &prev_key_state, glfw.KEY_D, &camera, step * VEC3_X, &player, terrain)
-        camera_movement(window, &prev_key_state, glfw.KEY_LEFT_SHIFT, &camera, -step * VEC3_Y, &player, terrain)
-        camera_movement(window, &prev_key_state, glfw.KEY_SPACE, &camera, step * VEC3_Y, &player, terrain)
 
         x, y := glfw.GetCursorPos(window)
         diff := Vec2{f32(x), f32(y)}  - prev_mouse_pos
@@ -251,9 +255,11 @@ main :: proc() {
         
         glfw.PollEvents()
         time.stopwatch_stop(&stopwatch)
+        fmt.println(time.stopwatch_duration(stopwatch))
         when INSTRUMENT {
-            fmt.println(time.stopwatch_duration(stopwatch), stats.physics.collision_test["collide_triangle_triangle"])
+            fmt.println(stats.render.draw, stats.physics.collision_test)
             stats = {}
         }
+        fmt.println("End of frame")
     }
 }
