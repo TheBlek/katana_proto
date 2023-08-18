@@ -158,8 +158,7 @@ model_load_from_file :: proc(path: string) -> (model: Model, ok := true) {
             accessors := gltf_descriptor["accessors"].(json.Array)
             bufferviews := gltf_descriptor["bufferViews"].(json.Array)
             buffers := gltf_descriptor["buffers"].(json.Array)
-
-            id := cast(u32) attributes[name].(json.Float)
+id := cast(u32) attributes[name].(json.Float)
             accessor := accessors[id].(json.Object)
 
             // assert(accessor["type"].(json.String) == "VEC3")
@@ -266,3 +265,34 @@ model_load_from_file :: proc(path: string) -> (model: Model, ok := true) {
 
     return
 }
+
+instance_create_pos_rot :: proc(
+    model: int,
+    position := VEC3_ZERO,
+    rotation := MAT3_IDENTITY,
+    scale := VEC3_ONE,
+    color := VEC3_ONE,
+) -> Instance {
+    return Instance {
+        model_id = model,
+        transform = { position, rotation },
+        scale = scale,
+        color = color,
+    }
+}
+
+instance_create_transform :: proc(
+    model: int,
+    transform: Transform,
+    scale := VEC3_ONE,
+    color := VEC3_ONE,
+) -> Instance {
+    return Instance {
+        model_id = model,
+        transform = transform,
+        scale = scale,
+        color = color,
+    }
+}
+
+instance_create :: proc { instance_create_pos_rot, instance_create_transform }

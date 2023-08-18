@@ -13,6 +13,8 @@ Vec4 :: linalg.Vector4f32
 Mat3 :: linalg.Matrix3f32
 Mat4 :: linalg.Matrix4f32
 
+VEC3_ZERO :: Vec3(0)
+VEC3_ONE :: Vec3(1)
 VEC3_X :: Vec3 {1, 0, 0} 
 VEC3_Y :: Vec3 {0, 1, 0}
 VEC3_Z :: Vec3 {0, 0, 1}
@@ -20,6 +22,9 @@ VEC3_Z :: Vec3 {0, 0, 1}
 VEC3_X_NEG :: Vec3 {-1, 0, 0} 
 VEC3_Y_NEG :: Vec3 {0, -1, 0}
 VEC3_Z_NEG :: Vec3 {0, 0, -1}
+
+MAT3_IDENTITY :: linalg.MATRIX3F32_IDENTITY
+MAT4_IDENTITY :: linalg.MATRIX4F32_IDENTITY
 
 EPS :: 0.001
 
@@ -40,6 +45,7 @@ MOVEMENT_BINDS :: []MovementKeyBind {
 }
 
 models: [dynamic]Model
+instance_count: int
 
 add_model :: proc(model: Model) -> (res: int) {
     res = len(models)
@@ -88,26 +94,11 @@ main :: proc() {
     }
     katana_model_id := add_model(katana_model)
 
-    katana := Instance {
-        model_id = katana_model_id,
-        scale = 0.5,
-        transform = Transform {
-            position = Vec3{-10, 2, 0},
-            rotation = linalg.MATRIX3F32_IDENTITY,
-        },
-    }
+    katana := instance_create(katana_model_id, scale = 0.5, position = Vec3{-10, 2, 0})
     instance_update(&katana)
 
     terrain_model_id := add_model(get_terrain(100, 100, 6, 200, 1))
-    terrain := Instance {
-        model_id = terrain_model_id,
-        scale = 1,
-        transform = Transform {
-            position = Vec3{0, 0, 0},
-            rotation = linalg.MATRIX3F32_IDENTITY,
-        },
-        color = {0.659, 0.392, 0.196},
-    }
+    terrain := instance_create(terrain_model_id, color = Vec3{0.659, 0.392, 0.196})
     instance_update(&terrain)
     terrain_partition := partition_grid_from_instance(1, 101, terrain)
 
@@ -120,45 +111,18 @@ main :: proc() {
     }
 
     cube_id := add_model(UNIT_CUBE)
-    obj1 := Instance {
-        model_id = cube_id,
-        scale = {1, 1, 1},
-        transform = Transform {
-            position = {2.2, 15, 0},
-            rotation = linalg.MATRIX3F32_IDENTITY,
-        },
-        color = {1, 0, 0},
-    }
+    obj1 := instance_create(cube_id, position = {2.2, 15, 0}, color = VEC3_X)
     instance_update(&obj1)
 
     capsule_id := add_model(UNIT_CAPSULE)
-    obj2 := Instance {
-        model_id = capsule_id,
-        scale = 1,
-        transform = Transform {
-            position = {2, 8, -0.8},
-            rotation = linalg.MATRIX3F32_IDENTITY,//linalg.matrix3_from_euler_angle_z(f32(linalg.PI) / 4),
-        },
-        color = {1, 0, 0},
-    }
+    obj2 := instance_create(capsule_id, position = {2, 8, -0.8}, color = VEC3_X)
     instance_update(&obj2)
 
     sphere_id := add_model(UNIT_SPHERE)
-    pointer := Instance {
-        model_id = sphere_id,
-        scale = 0.05,
-        transform = {
-            rotation = linalg.MATRIX3F32_IDENTITY,
-        },
-        color = {0, 0, 1},
-    }
+    pointer := instance_create(sphere_id, scale = 0.05, color = VEC3_Z)
     instance_update(&pointer)
 
-    player := Instance {
-        model_id = capsule_id,
-        scale = 1,
-        transform = camera.transform,
-    }
+    player := instance_create(capsule_id, position = camera.transform.position, rotation = camera.transform.rotation)
     instance_update(&player)
 
     renderer.dir_light = DirectionalLight { strength = 0.1, color = 1, direction = Vec3{1, 0, 0} }
