@@ -217,12 +217,12 @@ main :: proc() {
             if state == glfw.PRESS {
                 step := camera.transform.rotation * (dt * bind.vec)
                 player.transform.position += step 
+                instance_update(&player)
                 res := collide(player, terrain, terrain_partition)
-                // fmt.println(player.transform, transform, res)
+                fmt.println(player.transform.position)
                 if !res {
                     camera.transform.position += step
                     camera.camera_matrix = inverse(disposition_matrix(camera.transform))
-                    instance_update(&player)
                 } else {
                     player.transform.position -= step
                 }

@@ -471,6 +471,11 @@ PartitionGrid :: struct {
     triangle_ids: [][][dynamic]int,
 }
 
+rand_func :: proc(cell_size: f32, grid_size: [3]int, instance: Instance) {
+    vec4 := Vec4{0, 2, 1, 0}
+    vec := instance.model_matrix * vec4
+}
+
 partition_grid_from_instance :: proc(cell_size: f32, grid_size: [3]int, instance: Instance) -> (grid: PartitionGrid) {
     grid.cell_size = cell_size
     grid.grid_size = grid_size
@@ -484,6 +489,10 @@ partition_grid_from_instance :: proc(cell_size: f32, grid_size: [3]int, instance
     // get grid cell by coordinates, test it and all surrounding
 
     test_grid_cell :: proc(i: int, t: Triangle, grid: PartitionGrid, x, y: int, depth: int) {
+        if x < 0 || x >= grid.grid_size.x || y < 0 || y >= grid.grid_size.y {
+            return
+        }
+
         low_corner := Vec3 {
             -f32(grid.grid_size.x) * grid.cell_size / 2, 
             -f32(grid.grid_size.y) * grid.cell_size / 2, 
@@ -526,11 +535,13 @@ partition_grid_from_instance :: proc(cell_size: f32, grid_size: [3]int, instance
         -f32(grid.grid_size.z) * grid.cell_size / 2,
     }
     for i in 0..<triangle_count {
+        // vec4 := vec4_from_vec3(model.vertices[model.indices[3 * i + 2]], 1)
+        mat := instance.model_matrix
         triangle := Triangle {
             {
-                (instance.model_matrix * vec4_from_vec3(model.vertices[model.indices[3 * i]], 1)).xyz,
-                (instance.model_matrix * vec4_from_vec3(model.vertices[model.indices[3 * i + 1]], 1)).xyz,
-                (instance.model_matrix * vec4_from_vec3(model.vertices[model.indices[3 * i + 2]], 1)).xyz,
+                (mat * vec4_from_vec3(model.vertices[model.indices[3 * i]], 1)).xyz,
+                (mat * vec4_from_vec3(model.vertices[model.indices[3 * i + 1]], 1)).xyz,
+                (mat * vec4_from_vec3(model.vertices[model.indices[3 * i + 2]], 1)).xyz,
             },
             instance.normal_matrix * model.normals[model.indices[3 * i]],
         }
