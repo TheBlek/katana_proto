@@ -28,6 +28,10 @@ MAT4_IDENTITY :: linalg.MATRIX4F32_IDENTITY
 
 EPS :: 0.001
 
+COLOR_RED :: VEC3_X
+COLOR_GREEN :: VEC3_Y
+COLOR_BLUE :: VEC3_Z
+
 INSTRUMENT :: true
 
 MovementKeyBind :: struct {
@@ -111,18 +115,18 @@ main :: proc() {
     }
 
     cube_id := add_model(UNIT_CUBE)
-    obj1 := instance_create(cube_id, position = {2.2, 15, 0}, color = VEC3_X)
+    obj1 := instance_create(cube_id, position = {2.2, 15, 0}, color = COLOR_RED)
     instance_update(&obj1)
 
     capsule_id := add_model(UNIT_CAPSULE)
-    obj2 := instance_create(capsule_id, position = {2, 8, -0.8}, color = VEC3_X)
+    obj2 := instance_create(capsule_id, position = {2, 8, -0.8}, color = COLOR_RED)
     instance_update(&obj2)
 
     sphere_id := add_model(UNIT_SPHERE)
     pointer := instance_create(sphere_id, scale = 0.05, color = VEC3_Z)
     instance_update(&pointer)
 
-    player := instance_create(capsule_id, position = camera.transform.position, rotation = camera.transform.rotation)
+    player := instance_create(capsule_id, camera.transform)
     instance_update(&player)
 
     renderer.dir_light = DirectionalLight { strength = 0.1, color = 1, direction = Vec3{1, 0, 0} }
