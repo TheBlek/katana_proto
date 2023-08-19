@@ -86,6 +86,7 @@ void main()
 
         res += (ambient + diffuse + specular) * attenuation;
     }
+    //o_color = vec4(1, 0, 0, 1);
     o_color = vec4(res, 1);
 };
 

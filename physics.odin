@@ -4,6 +4,11 @@ import "core:math/linalg"
 import "core:math"
 import "core:fmt"
 
+PhysicsData :: struct {
+    models: ^[dynamic]Model,
+    aabbs: [dynamic]AABB,
+}
+
 Sphere :: struct {
     center: Vec3,
     radius: f32,
@@ -50,19 +55,19 @@ plane_normalized_from_triangle :: proc(using t: Triangle) -> (p: Plane) {
     return
 }
 
-aabb_from_instance :: proc(using instance: Instance) -> AABB {
+aabb_from_instance :: proc(cache: PhysicsData, using instance: Instance) -> AABB {
     instrument_proc(.PhysicsConversion)
     minimal: Vec3 = math.F32_MAX 
     maximal: Vec3
     
-    for vertex in models[model_id].vertices {
+    for vertex in cache.models[model_id].vertices {
         global := model_matrix * Vec4{vertex.x, vertex.y, vertex.z, 1}
         for i in 0..<3 {
             minimal[i] = min(minimal[i], global[i])
             maximal[i] = max(maximal[i], global[i])
         }
     }
-    return AABB { maximal, minimal } 
+    return AABB { maximal, minimal }
 }
 
 aabb_closest_point :: proc(aabb: AABB, point: Vec3) -> Vec3 {
@@ -167,8 +172,39 @@ collide_aabb_aabb :: proc(a, b: AABB) -> bool {
         a_max.z >= b_min.z && b_max.z >= a_min.z
 }
 
-exists_triangle :: proc(a: Instance, condition: proc(Triangle, $T) -> bool, data: T) -> bool {
-    model := &models[a.model_id]
+exists_triangle :: proc { exists_triangle_cache, exists_triangle_no_cache }
+
+exists_triangle_cache :: proc(
+    cache: PhysicsData,
+    a: Instance,
+    condition: proc(PhysicsData, Triangle, $T) -> bool,
+    data: T,
+) -> bool {
+    model := &cache.models[a.model_id]
+    triangle_count := len(model.indices) / 3
+    for i in 0..<triangle_count {
+        triangle := Triangle {
+            {
+                (a.model_matrix * vec4_from_vec3(model.vertices[model.indices[3 * i]], 1)).xyz,
+                (a.model_matrix * vec4_from_vec3(model.vertices[model.indices[3 * i + 1]], 1)).xyz,
+                (a.model_matrix * vec4_from_vec3(model.vertices[model.indices[3 * i + 2]], 1)).xyz,
+            },
+            a.normal_matrix * model.normals[model.indices[3 * i]],
+        }
+        if condition(cache, triangle, data) {
+            return true
+        }
+    }
+    return false
+}
+
+exists_triangle_no_cache :: proc(
+    cache: PhysicsData,
+    a: Instance,
+    condition: proc(Triangle, $T) -> bool,
+    data: T,
+) -> bool {
+    model := &cache.models[a.model_id]
     triangle_count := len(model.indices) / 3
     for i in 0..<triangle_count {
         triangle := Triangle {
@@ -186,12 +222,12 @@ exists_triangle :: proc(a: Instance, condition: proc(Triangle, $T) -> bool, data
     return false
 }
 
-collide_instance_aabb :: proc(a: Instance, b: AABB) -> bool {
+collide_instance_aabb :: proc(cache: PhysicsData, a: Instance, b: AABB) -> bool {
     instrument_proc(.PhysicsCollisionTest)
-    if !collide_aabb_aabb(b, a.aabb) {
+    if !collide_aabb_aabb(b, cache.aabbs[a.instance_id]) {
         return false
     }
-    return exists_triangle(a, collide_triangle_aabb, b)
+    return exists_triangle(cache, a, collide_triangle_aabb, b)
 }
 
 collide_triangle_triangle :: proc(a, b: Triangle) -> bool {
@@ -265,31 +301,35 @@ collide_triangle_triangle :: proc(a, b: Triangle) -> bool {
     return (max(t1, t2) > t3 && t3 > min(t1, t2)) || (max(t1, t2) > t4 && t4 > min(t1, t2))
 }
 
-collide_instance_triangle :: proc(a: Instance, b: Triangle) -> bool {
+collide_instance_triangle :: proc(cache: PhysicsData, a: Instance, b: Triangle) -> bool {
     instrument_proc(.PhysicsCollisionTest)
-    if !collide_triangle_aabb(b, a.aabb) {
+    if !collide_triangle_aabb(b, cache.aabbs[a.instance_id]) {
         return false
     }
 
-    return exists_triangle(a, collide_triangle_triangle, b)
+    return exists_triangle(cache, a, collide_triangle_triangle, b)
 }
 
-collide_triangle_instance :: proc(a: Triangle, b: Instance) -> bool {
-    return collide_instance_triangle(b, a)
+collide_triangle_instance :: proc(cache: PhysicsData, a: Triangle, b: Instance) -> bool {
+    return collide_instance_triangle(cache, b, a)
 }
 
-collide_instance_instance :: proc(a, b: Instance) -> bool {
+collide_instance_instance :: proc(cache: PhysicsData, a, b: Instance) -> bool {
     instrument_proc(.PhysicsCollisionTest)
-    if !collide_aabb_aabb(a.aabb, b.aabb) {
+    if !collide_aabb_aabb(cache.aabbs[a.instance_id], cache.aabbs[b.instance_id]) {
         return false
     }
 
-    return exists_triangle(a, collide_triangle_instance, b)
+    return exists_triangle(cache, a, collide_triangle_instance, b)
 }
 
-collide_instance_instance_partitioned :: proc(a, b: Instance, b_grid: PartitionGrid) -> bool {
+collide_instance_instance_partitioned :: proc(
+    cache: PhysicsData,
+    a, b: Instance,
+    b_grid: PartitionGrid,
+) -> bool {
     instrument_proc(.PhysicsCollisionTest)
-    if !collide_aabb_aabb(a.aabb, b.aabb) {
+    if !collide_aabb_aabb(cache.aabbs[a.instance_id], cache.aabbs[b.instance_id]) {
         return false
     }
 
@@ -304,8 +344,8 @@ collide_instance_instance_partitioned :: proc(a, b: Instance, b_grid: PartitionG
                 maximal=low_corner + Vec3{f32(x+1), f32(y+1), f32(math.F32_MAX)} * b_grid.cell_size,
                 minimal=low_corner + Vec3{f32(x), f32(y), f32(math.F32_MIN)} * b_grid.cell_size,
             }
-            if collide_instance_aabb(a, aabb) {
-                model := &models[b.model_id]
+            if collide_instance_aabb(cache, a, aabb) {
+                model := &cache.models[b.model_id]
                 for i in b_grid.triangle_ids[x][y] {
                     triangle := Triangle {
                         {
@@ -315,7 +355,7 @@ collide_instance_instance_partitioned :: proc(a, b: Instance, b_grid: PartitionG
                         },
                         b.normal_matrix * model.normals[model.indices[3 * i]],
                     }
-                    if collide_instance_triangle(a, triangle) {
+                    if collide_instance_triangle(cache, a, triangle) {
                         return true
                     }
                 }
@@ -471,12 +511,12 @@ PartitionGrid :: struct {
     triangle_ids: [][][dynamic]int,
 }
 
-rand_func :: proc(cell_size: f32, grid_size: [3]int, instance: Instance) {
-    vec4 := Vec4{0, 2, 1, 0}
-    vec := instance.model_matrix * vec4
-}
-
-partition_grid_from_instance :: proc(cell_size: f32, grid_size: [3]int, instance: Instance) -> (grid: PartitionGrid) {
+partition_grid_from_instance :: proc(
+    cache: PhysicsData,
+    cell_size: f32,
+    grid_size: [3]int,
+    instance: Instance,
+) -> (grid: PartitionGrid) {
     grid.cell_size = cell_size
     grid.grid_size = grid_size
 
@@ -484,8 +524,6 @@ partition_grid_from_instance :: proc(cell_size: f32, grid_size: [3]int, instance
     for i in 0..<grid_size.x {
         grid.triangle_ids[i] = make([][dynamic]int, grid_size.y)
     }
-
-
     // get grid cell by coordinates, test it and all surrounding
 
     test_grid_cell :: proc(i: int, t: Triangle, grid: PartitionGrid, x, y: int, depth: int) {
@@ -527,7 +565,7 @@ partition_grid_from_instance :: proc(cell_size: f32, grid_size: [3]int, instance
         }
     }
 
-    model := &models[instance.model_id]
+    model := &cache.models[instance.model_id]
     triangle_count := len(model.indices) / 3
     low_corner := Vec3 {
         -f32(grid.grid_size.x) * grid.cell_size / 2, 
@@ -535,7 +573,6 @@ partition_grid_from_instance :: proc(cell_size: f32, grid_size: [3]int, instance
         -f32(grid.grid_size.z) * grid.cell_size / 2,
     }
     for i in 0..<triangle_count {
-        // vec4 := vec4_from_vec3(model.vertices[model.indices[3 * i + 2]], 1)
         mat := instance.model_matrix
         triangle := Triangle {
             {

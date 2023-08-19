@@ -9,6 +9,7 @@ import "core:path/filepath"
 import "core:image/png"
 import "core:image"
 import "core:bytes"
+import "core:slice"
 
 Texture :: struct {
     filename: string,
@@ -29,12 +30,12 @@ Model :: struct {
 
 Instance :: struct {
     model_id: int,
+    instance_id: int,
     transform: Transform,
     scale: Vec3,
     model_matrix: Mat4,
     normal_matrix: Mat3,
     color: Vec3,
-    aabb: AABB, // TODO: decouple physics and render geometry
 }
 
 UNIT_CUBE :: Model {
@@ -133,10 +134,44 @@ scale_matrix :: proc(scale: Vec3) -> (result: Mat4) {
     return 
 }
 
-instance_update :: proc(using instance: ^Instance) {
+instance_update :: proc(state: GameState, using instance: ^Instance) {
     model_matrix = disposition_matrix(transform) * scale_matrix(scale)
     normal_matrix = linalg.matrix3_from_matrix4(inverse_transpose(model_matrix))
-    aabb = aabb_from_instance(instance^)
+    state.physics.aabbs[instance_id] = aabb_from_instance(state.physics, instance^)
+    instance_update_data(state, instance^)
+}
+
+instance_update_data :: proc(state: GameState, instance: Instance) {
+    instrument_proc(.Render)
+    model := &state.models[instance.model_id]
+
+    assert(
+        len(model.vertices) == len(model.normals),
+        "Normals do not correspond with vertices correctly",
+    )
+
+    if texs, exists := model.texture_data.(TextureData); exists {
+        assert(
+            len(model.vertices) == len(texs.uvs),
+            "UVs do not correspond with vertices correctly",
+        )
+    }
+
+    id := instance.instance_id
+    data := state.renderer.instance_data[id][:]
+    for i in 0..<len(model.vertices) {
+        using model
+
+        copy(data, vertices[i][:])
+        data = data[3:]
+        copy(data, normals[i][:])
+        data = data[3:]
+        if t, ok := texture_data.(TextureData); ok {
+            copy(data, t.uvs[i][:])
+            data = data[2:]
+        }
+    }
+    return
 }
 
 model_load_from_file :: proc(path: string) -> (model: Model, ok := true) {
@@ -158,7 +193,8 @@ model_load_from_file :: proc(path: string) -> (model: Model, ok := true) {
             accessors := gltf_descriptor["accessors"].(json.Array)
             bufferviews := gltf_descriptor["bufferViews"].(json.Array)
             buffers := gltf_descriptor["buffers"].(json.Array)
-id := cast(u32) attributes[name].(json.Float)
+            
+            id := cast(u32) attributes[name].(json.Float)
             accessor := accessors[id].(json.Object)
 
             // assert(accessor["type"].(json.String) == "VEC3")
@@ -265,34 +301,40 @@ id := cast(u32) attributes[name].(json.Float)
 
     return
 }
+instance_create :: proc { instance_create_pos_rot, instance_create_transform }
 
 instance_create_pos_rot :: proc(
+    state: ^GameState,
     model: int,
     position := VEC3_ZERO,
     rotation := MAT3_IDENTITY,
     scale := VEC3_ONE,
     color := VEC3_ONE,
 ) -> Instance {
-    return Instance {
-        model_id = model,
-        transform = { position, rotation },
-        scale = scale,
-        color = color,
-    }
+    return instance_create_transform(state, model, Transform{position, rotation}, scale, color)
 }
 
 instance_create_transform :: proc(
-    model: int,
+    state: ^GameState,
+    model_id: int,
     transform: Transform,
     scale := VEC3_ONE,
     color := VEC3_ONE,
 ) -> Instance {
+    id := state.instance_count
+    state.instance_count += 1
+    append(&state.physics.aabbs, AABB{})
+    model := state.models[model_id]
+    data_size := 2 * len(Vec3) * len(model.vertices)
+    if _, ok := model.texture_data.(TextureData); ok {
+        data_size += len(Vec2) * len(model.vertices)
+    }
+    append(&state.renderer.instance_data, make([]f32, data_size))
     return Instance {
-        model_id = model,
+        model_id = model_id,
+        instance_id = id,
         transform = transform,
         scale = scale,
         color = color,
     }
 }
-
-instance_create :: proc { instance_create_pos_rot, instance_create_transform }

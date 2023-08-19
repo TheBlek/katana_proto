@@ -48,12 +48,16 @@ MOVEMENT_BINDS :: []MovementKeyBind {
     { glfw.KEY_SPACE, VEC3_Y },
 }
 
-models: [dynamic]Model
-instance_count: int
+GameState :: struct {
+    models: [dynamic]Model,
+    instance_count: int,
+    renderer: Renderer,
+    physics: PhysicsData, 
+}
 
-add_model :: proc(model: Model) -> (res: int) {
-    res = len(models)
-    append(&models, model)
+register_model :: proc(state: ^GameState, m: Model) -> (res: int) {
+    res = len(state.models)
+    append(&state.models, m)
     return
 }
 
@@ -86,6 +90,11 @@ main :: proc() {
         projection_matrix = calculate_projection_matrix(fov, near, far)
         camera_matrix = inverse(disposition_matrix(transform))
     }
+    state := GameState {
+        renderer = renderer
+    }
+    state.renderer.models = &state.models
+    state.physics.models = &state.models
 
     katana_model, ok_file := model_load_from_file("./resources/katana.gltf")
     assert(ok_file)
@@ -96,42 +105,34 @@ main :: proc() {
                 { filename="./resources/katana_specular.png" },
             }
     }
-    katana_model_id := add_model(katana_model)
+    katana_model_id := register_model(&state, katana_model)
 
-    katana := instance_create(katana_model_id, scale = 0.5, position = Vec3{-10, 2, 0})
-    instance_update(&katana)
+    katana := instance_create(&state, katana_model_id, scale = 0.5, position = Vec3{-10, 2, 0})
+    instance_update(state, &katana)
 
-    terrain_model_id := add_model(get_terrain(100, 100, 6, 200, 1))
-    terrain := instance_create(terrain_model_id, color = Vec3{0.659, 0.392, 0.196})
-    instance_update(&terrain)
-    terrain_partition := partition_grid_from_instance(1, 101, terrain)
+    terrain_model_id := register_model(&state, get_terrain(100, 100, 6, 200, 1))
+    terrain := instance_create(&state, terrain_model_id, color = Vec3{0.659, 0.392, 0.196})
+    instance_update(state, &terrain)
+    terrain_partition := partition_grid_from_instance(state.physics, 1, 101, terrain)
 
-    triangle := Model {
-        vertices = {{0.5, 0, 0}, {0, 0.5, 0}, {0, 0, 0.5}},
-        normals = {
-            linalg.sqrt(f32(3)), linalg.sqrt(f32(3)), linalg.sqrt(f32(3)),
-        },
-        indices = {0, 1, 2},
-    }
+    cube_id := register_model(&state, UNIT_CUBE)
+    obj1 := instance_create(&state, cube_id, position = {2.2, 15, 0}, color = COLOR_RED)
+    instance_update(state, &obj1)
 
-    cube_id := add_model(UNIT_CUBE)
-    obj1 := instance_create(cube_id, position = {2.2, 15, 0}, color = COLOR_RED)
-    instance_update(&obj1)
+    capsule_id := register_model(&state, UNIT_CAPSULE)
+    obj2 := instance_create(&state, capsule_id, position = {2, 8, -0.8}, color = COLOR_RED)
+    instance_update(state, &obj2)
 
-    capsule_id := add_model(UNIT_CAPSULE)
-    obj2 := instance_create(capsule_id, position = {2, 8, -0.8}, color = COLOR_RED)
-    instance_update(&obj2)
+    sphere_id := register_model(&state, UNIT_SPHERE)
+    pointer := instance_create(&state, sphere_id, scale = 0.05, color = VEC3_Z)
+    instance_update(state, &pointer)
 
-    sphere_id := add_model(UNIT_SPHERE)
-    pointer := instance_create(sphere_id, scale = 0.05, color = VEC3_Z)
-    instance_update(&pointer)
+    player := instance_create(&state, capsule_id, camera.transform)
+    instance_update(state, &player)
 
-    player := instance_create(capsule_id, camera.transform)
-    instance_update(&player)
-
-    renderer.dir_light = DirectionalLight { strength = 0.1, color = 1, direction = Vec3{1, 0, 0} }
-    append(&renderer.point_lights, PointLight { strength = 1, color = Vec3{1, 1, 0}, constant = 1, linear = 0.09, quadratic = 0.032 })
-    light := &renderer.point_lights[0]
+    state.renderer.dir_light = DirectionalLight { strength = 0.1, color = 1, direction = Vec3{1, 0, 0} }
+    append(&state.renderer.point_lights, PointLight { strength = 1, color = Vec3{1, 1, 0}, constant = 1, linear = 0.09, quadratic = 0.032 })
+    light := &state.renderer.point_lights[0]
 
     prev_key_state: map[i32]i32
     prev_mouse_pos: Vec2
@@ -146,12 +147,6 @@ main :: proc() {
         time.stopwatch_start(&stopwatch)
         // Game logic
         if !pause {
-            verts := [3]Vec3 { 
-                (obj2.model_matrix * Vec4 {triangle.vertices[0].x, triangle.vertices[0].y, triangle.vertices[0].z, 1}).xyz,
-                (obj2.model_matrix * Vec4 {triangle.vertices[1].x, triangle.vertices[1].y, triangle.vertices[1].z, 1}).xyz,
-                (obj2.model_matrix * Vec4 {triangle.vertices[2].x, triangle.vertices[2].y, triangle.vertices[2].z, 1}).xyz,
-            }
-            tris := Triangle{verts, linalg.cross(verts[1] - verts[0], verts[2] - verts[0])}
             // result := collide(obj1, obj2)
             // if !result {
             //     obj1.transform.position.y -= gravity_step
@@ -181,13 +176,12 @@ main :: proc() {
 
         dt: f32 = 0.05
         for bind in MOVEMENT_BINDS {
-            state := glfw.GetKey(window, bind.key)
-            if state == glfw.PRESS {
+            key := glfw.GetKey(window, bind.key)
+            if key == glfw.PRESS {
                 step := camera.transform.rotation * (dt * bind.vec)
                 player.transform.position += step 
-                instance_update(&player)
-                res := collide(player, terrain, terrain_partition)
-                fmt.println(player.transform.position)
+                // instance_update(state, &player)
+                res := collide(state.physics, player, terrain, terrain_partition)
                 if !res {
                     camera.transform.position += step
                     camera.camera_matrix = inverse(disposition_matrix(camera.transform))
@@ -195,7 +189,7 @@ main :: proc() {
                     player.transform.position -= step
                 }
             }
-            prev_key_state[bind.key] = state
+            prev_key_state[bind.key] = key
         }
 
         x, y := glfw.GetCursorPos(window)
@@ -214,11 +208,11 @@ main :: proc() {
 
         // Rendering
         gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-        renderer_draw_instance(&renderer, camera, &katana)
-        renderer_draw_instance(&renderer, camera, &terrain)
-        renderer_draw_instance(&renderer, camera, &obj1)
-        renderer_draw_instance(&renderer, camera, &obj2)
-        renderer_draw_instance(&renderer, camera, &pointer)
+        renderer_draw_instance(&state.renderer, camera, &katana)
+        renderer_draw_instance(&state.renderer, camera, &terrain)
+        renderer_draw_instance(&state.renderer, camera, &obj1)
+        renderer_draw_instance(&state.renderer, camera, &obj2)
+        renderer_draw_instance(&state.renderer, camera, &pointer)
         glfw.SwapBuffers(window)
         
         glfw.PollEvents()
