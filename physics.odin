@@ -421,6 +421,12 @@ collide :: proc{
     collide_ray_aabb,
 }
 
+collision :: proc{ 
+    collision_ray_aabb,
+    collision_ray_sphere,
+    collision_ray_triangle,
+}
+
 collision_ray_sphere :: proc(ray: Ray, sphere: Sphere) -> Maybe(Vec3) {
     instrument_proc(.PhysicsCollision)
     centered_origin := ray.origin - sphere.center 
@@ -497,12 +503,6 @@ collision_ray_triangle :: proc(using ray: Ray, using t: Triangle) -> Maybe(Vec3)
         return nil
     }
     return origin + (t / d) * direction
-}
-
-collision :: proc{ 
-    collision_ray_aabb,
-    collision_ray_sphere,
-    collision_ray_triangle,
 }
 
 PartitionGrid :: struct {

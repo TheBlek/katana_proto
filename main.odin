@@ -91,7 +91,7 @@ main :: proc() {
         camera_matrix = inverse(disposition_matrix(transform))
     }
     state := GameState {
-        renderer = renderer
+        renderer = renderer,
     }
     state.renderer.models = &state.models
     state.physics.models = &state.models
@@ -127,9 +127,6 @@ main :: proc() {
     pointer := instance_create(&state, sphere_id, scale = 0.05, color = VEC3_Z)
     instance_update(state, &pointer)
 
-    player := instance_create(&state, capsule_id, camera.transform)
-    instance_update(state, &player)
-
     state.renderer.dir_light = DirectionalLight { strength = 0.1, color = 1, direction = Vec3{1, 0, 0} }
     append(&state.renderer.point_lights, PointLight { strength = 1, color = Vec3{1, 1, 0}, constant = 1, linear = 0.09, quadratic = 0.032 })
     light := &state.renderer.point_lights[0]
@@ -138,73 +135,55 @@ main :: proc() {
     prev_mouse_pos: Vec2
     pitch, yaw: f32
     mouse_sensitivity:f32 = 0.01
-    gravity_step: f32 = 0.02
+    gravity: f32 = -9
     stopwatch: time.Stopwatch
     pause := false
     angle: f32 = 0
+    dt: f32 = 0.05
     for !glfw.WindowShouldClose(window) { // Render
         time.stopwatch_reset(&stopwatch)
         time.stopwatch_start(&stopwatch)
         // Game logic
         if !pause {
-            // result := collide(obj1, obj2)
-            // if !result {
-            //     obj1.transform.position.y -= gravity_step
-            //     instance_update(&obj1)
+            
+            // Input
+            // for bind in MOVEMENT_BINDS {
+            //     key := glfw.GetKey(window, bind.key)
+            //     if key == glfw.PRESS {
+            //         step := camera.transform.rotation * (dt * bind.vec)
+            //         player.transform.position += step 
+            //         // instance_update(state, &player)
+            //         res := collide(state.physics, player, terrain, terrain_partition)
+            //         if !res {
+            //             camera.transform.position += step
+            //             camera.camera_matrix = inverse(disposition_matrix(camera.transform))
+            //         } else {
+            //             player.transform.position -= step
+            //         }
+            //     }
+            //     prev_key_state[bind.key] = key
             // }
 
-            // point1 := (disposition_matrix(camera.transform) * Vec4{0, 0, 0, 1}).xyz
-            // point2 := (disposition_matrix(camera.transform) * Vec4{0, 0, -1, 1}).xyz
-            // ray := ray_from_points(Vec3(point1), Vec3(point2))
-            // if collision, ok := collision(ray, tris).(Vec3); ok {
-            //     pointer.transform.position = collision
-            //     instance_update(&pointer)
-            // }
-            angle += gravity_step 
-            direction := linalg.matrix3_from_euler_angle_z(angle) * Vec3{1, 0, 0}
-            // renderer.dir_light.direction = direction
+            x, y := glfw.GetCursorPos(window)
+            diff := Vec2{f32(x), f32(y)}  - prev_mouse_pos
+            if linalg.length(diff) > 0.1 {
+                offset := diff * mouse_sensitivity
+                pitch -= offset.y
+                yaw -= offset.x
+
+                pitch = clamp(pitch, -math.PI/2 - 0.1, math.PI/2 - 0.1)
+
+                camera.transform.rotation = linalg.matrix3_from_yaw_pitch_roll(yaw, pitch, 0)
+                camera.camera_matrix = inverse(disposition_matrix(camera.transform))
+                prev_mouse_pos = Vec2{f32(x), f32(y)}
+            }
         }
-        light.position.y += gravity_step
-
-        // Input
         e_state := glfw.GetKey(window, glfw.KEY_E)
         if e_state == glfw.PRESS && prev_key_state[glfw.KEY_E] == glfw.RELEASE {
             pause = !pause
             fmt.println("Pressed e")
         }
         prev_key_state[glfw.KEY_E] = e_state
-
-        dt: f32 = 0.05
-        for bind in MOVEMENT_BINDS {
-            key := glfw.GetKey(window, bind.key)
-            if key == glfw.PRESS {
-                step := camera.transform.rotation * (dt * bind.vec)
-                player.transform.position += step 
-                // instance_update(state, &player)
-                res := collide(state.physics, player, terrain, terrain_partition)
-                if !res {
-                    camera.transform.position += step
-                    camera.camera_matrix = inverse(disposition_matrix(camera.transform))
-                } else {
-                    player.transform.position -= step
-                }
-            }
-            prev_key_state[bind.key] = key
-        }
-
-        x, y := glfw.GetCursorPos(window)
-        diff := Vec2{f32(x), f32(y)}  - prev_mouse_pos
-        if linalg.length(diff) > 0.1 {
-            offset := diff * mouse_sensitivity
-            pitch -= offset.y
-            yaw -= offset.x
-
-            pitch = clamp(pitch, -math.PI/2 - 0.1, math.PI/2 - 0.1)
-
-            camera.transform.rotation = linalg.matrix3_from_yaw_pitch_roll(yaw, pitch, 0)
-            camera.camera_matrix = inverse(disposition_matrix(camera.transform))
-            prev_mouse_pos = Vec2{f32(x), f32(y)}
-        }
 
         // Rendering
         gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
@@ -217,7 +196,8 @@ main :: proc() {
         
         glfw.PollEvents()
         time.stopwatch_stop(&stopwatch)
-        fmt.println(time.stopwatch_duration(stopwatch))
+        dt = cast(f32)time.duration_seconds(time.stopwatch_duration(stopwatch))
+        fmt.println(dt)
         when INSTRUMENT {
             fmt.println(stats.render.draw, stats.physics.collision_test)
             stats = {}
