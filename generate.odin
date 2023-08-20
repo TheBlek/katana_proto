@@ -4,7 +4,6 @@ import "core:math"
 import "core:math/linalg"
 import "core:math/rand"
 import "core:slice"
-import "core:fmt"
 
 expand_triangles :: proc(vertices: ^[dynamic]Vec3, indices: ^[dynamic]u32) {
     triangle_count := len(indices) / 3
@@ -48,7 +47,7 @@ expand_triangles :: proc(vertices: ^[dynamic]Vec3, indices: ^[dynamic]u32) {
         append(indices, u32(bc_i), u32(ab_i), u32(ac_i))
     }
 
-    for i in 0..<triangle_count {
+    for _ in 0..<triangle_count {
         // We can do unordered bc # of ids is divisible by 3
         ordered_remove(indices, 0)
         ordered_remove(indices, 0)
@@ -79,7 +78,7 @@ get_sphere :: proc(n: int) -> Model {
         2, 3, 4,
     }
 
-    for i in 0..<n {
+    for _ in 0..<n {
         expand_triangles(&vertices, &indices)
     }
 
@@ -130,7 +129,6 @@ get_capsule :: proc(n: int) -> Model {
     }
 
     triangle_count := len(indices) / 3
-    next := 0
     for i in 0..<triangle_count {
         a_i := indices[3 * i]
         b_i := indices[3 * i + 1]

@@ -425,6 +425,7 @@ collision :: proc{
     collision_ray_aabb,
     collision_ray_sphere,
     collision_ray_triangle,
+    collision_ray_instance,
 }
 
 collision_ray_sphere :: proc(ray: Ray, sphere: Sphere) -> Maybe(Vec3) {
@@ -503,6 +504,30 @@ collision_ray_triangle :: proc(using ray: Ray, using t: Triangle) -> Maybe(Vec3)
         return nil
     }
     return origin + (t / d) * direction
+}
+
+collision_ray_instance :: proc(data: PhysicsData, a: Ray, b: Instance) -> Maybe(Vec3) {
+    if !collide(a, data.aabbs[b.instance_id]) {
+       return nil 
+    }
+    model := data.models[b.model_id]
+    triangle_count := len(model.indices) / 3
+    for i in 0..<triangle_count {
+        m_mat := b.model_matrix
+        n_mat := b.normal_matrix
+        triangle := Triangle {
+            {
+                (m_mat * vec4_from_vec3(model.vertices[model.indices[3 * i + 1]], 1)).xyz,
+                (m_mat * vec4_from_vec3(model.vertices[model.indices[3 * i + 1]], 1)).xyz,
+                (m_mat * vec4_from_vec3(model.vertices[model.indices[3 * i + 1]], 1)).xyz,
+            },
+            n_mat * model.normals[model.indices[3 * i]],
+        }
+        if point, ok := collision(a, triangle).(Vec3); ok {
+            return point
+        }
+    }
+    return nil
 }
 
 PartitionGrid :: struct {

@@ -4,12 +4,12 @@ import gl "vendor:OpenGL"
 import "core:math/linalg"
 import "core:encoding/json"
 import "core:os"
-import "core:fmt"
 import "core:path/filepath"
 import "core:image/png"
 import "core:image"
 import "core:bytes"
 import "core:slice"
+import "core:fmt"
 
 Texture :: struct {
     filename: string,
@@ -272,8 +272,8 @@ model_load_from_file :: proc(path: string) -> (model: Model, ok := true) {
         filename := buffers[buffer_id].(json.Object)["uri"].(json.String)
         target_path := filepath.join({filepath.dir(path), filename})
 
-        data, ok := os.read_entire_file_from_filename(target_path)
-        assert(ok)
+        data, file_success := os.read_entire_file_from_filename(target_path)
+        assert(file_success)
 
         offset := cast(int) bufferview["byteOffset"].(json.Float)
         if off := accessor["byteOffset"]; off != nil {
