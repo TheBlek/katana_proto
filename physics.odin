@@ -41,17 +41,15 @@ ray_from_points :: proc(from, to: Vec3) -> Ray {
 
 plane_from_triangle :: proc(using t: Triangle) -> (p: Plane) {
     instrument_proc(.PhysicsConversion)
-    using linalg
     p.normal = normal
-    p.d = -dot(p.normal, points[0])
+    p.d = -linalg.dot(p.normal, points[0])
     return
 }
 
 plane_normalized_from_triangle :: proc(using t: Triangle) -> (p: Plane) {
     instrument_proc(.PhysicsConversion)
-    using linalg
-    p.normal = normalize(normal)
-    p.d = -dot(p.normal, points[0])
+    p.normal = linalg.normalize(normal)
+    p.d = -linalg.dot(p.normal, points[0])
     return
 }
 
@@ -232,13 +230,12 @@ collide_instance_aabb :: proc(cache: PhysicsData, a: Instance, b: AABB) -> bool 
 
 collide_triangle_triangle :: proc(a, b: Triangle) -> bool {
     instrument_proc(.PhysicsCollisionTest)
-    using linalg
     // Small normals can cause robustness problems
     a_plane := plane_normalized_from_triangle(a)
     sdistb := [3]f32 {
-        dot(a_plane.normal, b.points[0]) + a_plane.d,
-        dot(a_plane.normal, b.points[1]) + a_plane.d,
-        dot(a_plane.normal, b.points[2]) + a_plane.d,
+        linalg.dot(a_plane.normal, b.points[0]) + a_plane.d,
+        linalg.dot(a_plane.normal, b.points[1]) + a_plane.d,
+        linalg.dot(a_plane.normal, b.points[2]) + a_plane.d,
     }
     // Precision problems. Floating point arithmetic
     if abs(sdistb[0]) < EPS && abs(sdistb[1]) < EPS && abs(sdistb[2]) < EPS {
@@ -250,9 +247,9 @@ collide_triangle_triangle :: proc(a, b: Triangle) -> bool {
     // Small normals can cause robustness problems
     b_plane := plane_normalized_from_triangle(b)
     sdist := [3]f32 {
-        dot(b_plane.normal, a.points[0]) + b_plane.d,
-        dot(b_plane.normal, a.points[1]) + b_plane.d,
-        dot(b_plane.normal, a.points[2]) + b_plane.d,
+        linalg.dot(b_plane.normal, a.points[0]) + b_plane.d,
+        linalg.dot(b_plane.normal, a.points[1]) + b_plane.d,
+        linalg.dot(b_plane.normal, a.points[2]) + b_plane.d,
     }
     // Precision problems. Floating point arithmetic
     if abs(sdist[0]) < EPS && abs(sdist[1]) < EPS && abs(sdist[2]) < EPS {
@@ -262,7 +259,7 @@ collide_triangle_triangle :: proc(a, b: Triangle) -> bool {
         return false
     }
 
-    intersection_dir := cross(a_plane.normal, b_plane.normal)
+    intersection_dir := linalg.cross(a_plane.normal, b_plane.normal)
     projection_index: int
     max_axis := max(abs(intersection_dir.x), abs(intersection_dir.y), abs(intersection_dir.z))
     if max_axis == abs(intersection_dir.x) {
@@ -479,27 +476,26 @@ collision_ray_aabb :: proc(ray: Ray, aabb: AABB) -> Maybe(Vec3) {
 
 collision_ray_triangle :: proc(using ray: Ray, using t: Triangle) -> Maybe(Vec3) {
     instrument_proc(.PhysicsCollision)
-    using linalg
-    d := dot(-direction, normal)
+    d := linalg.dot(-direction, normal)
 
     if d <= 0 {
         return nil
     }
 
     ap := origin - points[0]
-    t := dot(ap, normal)
+    t := linalg.dot(ap, normal)
     if t < 0 {
         return nil
     }
 
     ac := points[2] - points[0]
-    ed := cross(-direction, ap)
-    v := dot(ac, ed)
+    ed := linalg.cross(-direction, ap)
+    v := linalg.dot(ac, ed)
     if v < 0 || v > d {
         return nil
     }
     ab := points[1] - points[0]
-    w := -dot(ab, ed)
+    w := -linalg.dot(ab, ed)
     if w < 0 || v + w > d {
         return nil
     }

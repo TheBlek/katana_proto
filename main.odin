@@ -81,15 +81,17 @@ main :: proc() {
     camera := Camera {
         fov = 70,
         transform = Transform {
-            rotation = linalg.MATRIX3F32_IDENTITY, position = Vec3{0, 10, 25}, },
+            rotation = MAT3_IDENTITY,
+            position = Vec3{0, 10, 25},
+        },
         near = 0.1,
         far = 1000,
     }
-    {
-        using camera
-        projection_matrix = calculate_projection_matrix(fov, near, far)
-        camera_matrix = inverse(disposition_matrix(transform))
-    }
+    camera.projection_matrix = calculate_projection_matrix(
+        camera.fov,
+        camera.near,
+        camera.far,
+    )
     state := GameState {
         renderer = renderer,
     }
@@ -113,7 +115,7 @@ main :: proc() {
     terrain_model_id := register_model(&state, get_terrain(100, 100, 6, 200, 1))
     terrain := instance_create(&state, terrain_model_id, color = Vec3{0.659, 0.392, 0.196})
     instance_update(state, &terrain)
-    terrain_partition := partition_grid_from_instance(state.physics, 1, 101, terrain)
+    // terrain_partition := partition_grid_from_instance(state.physics, 1, 101, terrain)
 
     cube_id := register_model(&state, UNIT_CUBE)
     obj1 := instance_create(&state, cube_id, position = {2.2, 15, 0}, color = COLOR_RED)
@@ -129,16 +131,15 @@ main :: proc() {
 
     state.renderer.dir_light = DirectionalLight { strength = 0.1, color = 1, direction = Vec3{1, 0, 0} }
     append(&state.renderer.point_lights, PointLight { strength = 1, color = Vec3{1, 1, 0}, constant = 1, linear = 0.09, quadratic = 0.032 })
-    light := &state.renderer.point_lights[0]
+    // light := &state.renderer.point_lights[0]
 
     prev_key_state: map[i32]i32
     prev_mouse_pos: Vec2
     pitch, yaw: f32
     mouse_sensitivity:f32 = 0.01
-    gravity: f32 = -9
+    // gravity: f32 = -9
     stopwatch: time.Stopwatch
     pause := false
-    angle: f32 = 0
     dt: f32 = 0.05
     for !glfw.WindowShouldClose(window) { // Render
         time.stopwatch_reset(&stopwatch)
@@ -166,9 +167,10 @@ main :: proc() {
             pitch = clamp(pitch, -math.PI/2 - 0.1, math.PI/2 - 0.1)
 
             camera.transform.rotation = linalg.matrix3_from_yaw_pitch_roll(yaw, pitch, 0)
-            camera.camera_matrix = inverse(disposition_matrix(camera.transform))
+            camera_update(&camera)
             prev_mouse_pos = Vec2{f32(x), f32(y)}
         }
+
         e_state := glfw.GetKey(window, glfw.KEY_E)
         if e_state == glfw.PRESS && prev_key_state[glfw.KEY_E] == glfw.RELEASE {
             pause = !pause

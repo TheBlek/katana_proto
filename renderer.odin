@@ -30,10 +30,10 @@ calculate_projection_matrix_full :: proc(l, r, b, t, n, f: f32) -> (projection_m
 }
 
 calculate_projection_matrix :: proc(fov, near, far: f32) -> (projection_matrix: Mat4) {
-    fov := math.to_radians(fov)
+    fov_rad := math.to_radians(fov)
     aspect_ratio: f32 = f32(WIDTH) / HEIGHT
 
-    width := 2 * near * math.tan(fov/2)
+    width := 2 * near * math.tan(fov_rad/2)
     height := width / aspect_ratio
     projection_matrix = {
         2 * near / width,   0,                  0,                              0,
@@ -42,6 +42,10 @@ calculate_projection_matrix :: proc(fov, near, far: f32) -> (projection_matrix: 
         0,                  0,                  -1,                             0,
     }
     return
+}
+
+camera_update :: proc(camera: ^Camera) {
+    camera.camera_matrix = inverse(disposition_matrix(camera.transform))
 }
 
 PointLight :: struct {
