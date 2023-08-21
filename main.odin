@@ -26,13 +26,15 @@ VEC3_Z_NEG :: Vec3 {0, 0, -1}
 MAT3_IDENTITY :: linalg.MATRIX3F32_IDENTITY
 MAT4_IDENTITY :: linalg.MATRIX4F32_IDENTITY
 
-EPS :: 0.001
+EPS :: linalg.F32_EPSILON
 
 COLOR_RED :: VEC3_X
 COLOR_GREEN :: VEC3_Y
 COLOR_BLUE :: VEC3_Z
 
-INSTRUMENT :: true
+INSTRUMENT :: false
+
+GRAVITY :: Vec3 {0, -9.81, 0}
 
 MovementKeyBind :: struct {
     key: i32,
@@ -82,7 +84,7 @@ main :: proc() {
         fov = 70,
         transform = Transform {
             rotation = MAT3_IDENTITY,
-            position = Vec3{0, 10, 25},
+            position = Vec3{0, 6, 25},
         },
         near = 0.1,
         far = 1000,
@@ -137,39 +139,58 @@ main :: proc() {
     prev_mouse_pos: Vec2
     pitch, yaw: f32
     mouse_sensitivity:f32 = 0.01
-    // gravity: f32 = -9
+
+    player_velocity := Vec3(0)
+    player_position := Vec3{0, 10, 25}
+    grounded := false
+ 
     stopwatch: time.Stopwatch
-    pause := false
+    pause := true
     dt: f32 = 0.05
     for !glfw.WindowShouldClose(window) { // Render
         time.stopwatch_reset(&stopwatch)
         time.stopwatch_start(&stopwatch)
         // Game logic
+        downwards := Ray { player_position, VEC3_Y_NEG }
+
+        if point, ok := collision(state.physics, downwards, terrain).(Vec3); ok {
+            fmt.println("Collision")
+            fmt.println(point)
+            if linalg.length(player_position - point) < 0.01 {
+                grounded = true
+                player_velocity.y = 0
+            }
+            pointer.transform.position = point
+            instance_update(state, &pointer)
+        }
         if !pause {
 
-            point1 := (disposition_matrix(camera.transform) * Vec4{0, 0, 0, 1}).xyz
-            point2 := (disposition_matrix(camera.transform) * Vec4{0, 0, -1, 1}).xyz
-            ray := ray_from_points(Vec3(point1), Vec3(point2))
-            if point, ok := collision(state.physics, ray, obj2).(Vec3); ok {
-                pointer.transform.position = point
-                fmt.println(point)
-                instance_update(state, &pointer)
+            if !grounded {
+                player_velocity += GRAVITY * dt
+            }
+
+            player_position += player_velocity * dt
+            camera.transform.position = player_position
+
+            sight := Ray { camera.transform.position, camera.transform.rotation * VEC3_Z_NEG }
+            if point, ok := collision(state.physics, sight, obj2).(Vec3); ok {
             }
         }
+        fmt.println(camera.transform, player_position)
 
         x, y := glfw.GetCursorPos(window)
         diff := Vec2{f32(x), f32(y)}  - prev_mouse_pos
-        if linalg.length(diff) > 0.1 {
+        if linalg.length(diff) > EPS {
             offset := diff * mouse_sensitivity
+
             pitch -= offset.y
             yaw -= offset.x
-
             pitch = clamp(pitch, -math.PI/2 - 0.1, math.PI/2 - 0.1)
 
             camera.transform.rotation = linalg.matrix3_from_yaw_pitch_roll(yaw, pitch, 0)
-            camera_update(&camera)
             prev_mouse_pos = Vec2{f32(x), f32(y)}
         }
+        camera_update(&camera)
 
         e_state := glfw.GetKey(window, glfw.KEY_E)
         if e_state == glfw.PRESS && prev_key_state[glfw.KEY_E] == glfw.RELEASE {
