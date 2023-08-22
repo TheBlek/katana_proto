@@ -499,6 +499,8 @@ collision_ray_triangle :: proc(using ray: Ray, using t: Triangle) -> Maybe(Vec3)
     if w < 0 || v + w > d {
         return nil
     }
+    // This may cause some problems
+    // assert(linalg.dot(linalg.cross(ab, ac), normal) < 0)
     return origin + (t / d) * direction
 }
 
@@ -514,8 +516,8 @@ collision_ray_instance :: proc(data: PhysicsData, a: Ray, b: Instance) -> Maybe(
         triangle := Triangle {
             {
                 (m_mat * vec4_from_vec3(model.vertices[model.indices[3 * i + 1]], 1)).xyz,
-                (m_mat * vec4_from_vec3(model.vertices[model.indices[3 * i + 1]], 1)).xyz,
-                (m_mat * vec4_from_vec3(model.vertices[model.indices[3 * i + 1]], 1)).xyz,
+                (m_mat * vec4_from_vec3(model.vertices[model.indices[3 * i + 2]], 1)).xyz,
+                (m_mat * vec4_from_vec3(model.vertices[model.indices[3 * i + 3]], 1)).xyz,
             },
             n_mat * model.normals[model.indices[3 * i]],
         }

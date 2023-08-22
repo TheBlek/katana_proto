@@ -35,6 +35,7 @@ COLOR_BLUE :: VEC3_Z
 INSTRUMENT :: false
 
 GRAVITY :: Vec3 {0, -9.81, 0}
+PLAYER_HEIGHT :: 1.9
 
 MovementKeyBind :: struct {
     key: i32,
@@ -84,7 +85,7 @@ main :: proc() {
         fov = 70,
         transform = Transform {
             rotation = MAT3_IDENTITY,
-            position = Vec3{0, 6, 25},
+            position = Vec3{0, 100, 25},
         },
         near = 0.1,
         far = 1000,
@@ -153,17 +154,14 @@ main :: proc() {
         // Game logic
         downwards := Ray { player_position, VEC3_Y_NEG }
 
-        if point, ok := collision(state.physics, downwards, terrain).(Vec3); ok {
-            fmt.println("Collision")
-            fmt.println(point)
-            if linalg.length(player_position - point) < 0.01 {
-                grounded = true
-                player_velocity.y = 0
-            }
-            pointer.transform.position = point
-            instance_update(state, &pointer)
-        }
         if !pause {
+            if point, ok := collision(state.physics, downwards, terrain).(Vec3); ok {
+                fmt.println(point)
+                if linalg.length(player_position - point) < PLAYER_HEIGHT {
+                    grounded = true
+                    player_velocity.y = 0
+                }
+            }
 
             if !grounded {
                 player_velocity += GRAVITY * dt
@@ -171,12 +169,14 @@ main :: proc() {
 
             player_position += player_velocity * dt
             camera.transform.position = player_position
+            fmt.println(player_position)
 
             sight := Ray { camera.transform.position, camera.transform.rotation * VEC3_Z_NEG }
             if point, ok := collision(state.physics, sight, obj2).(Vec3); ok {
+                pointer.transform.position = point
+                instance_update(state, &pointer)
             }
         }
-        fmt.println(camera.transform, player_position)
 
         x, y := glfw.GetCursorPos(window)
         diff := Vec2{f32(x), f32(y)}  - prev_mouse_pos
