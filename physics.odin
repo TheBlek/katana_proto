@@ -39,17 +39,26 @@ ray_from_points :: proc(from, to: Vec3) -> Ray {
     return { from, linalg.normalize(to - from) }
 }
 
+plane_project_point :: proc(plane: Plane, point: Vec3) -> Vec3 {
+    t := (-plane.d - linalg.dot(plane.normal, point)) / linalg.length2(plane.normal)  
+    return point + t * plane.normal
+}
+
+plane_from_normal_n_point :: proc(normal: Vec3, point: Vec3) -> (p: Plane) {
+    p.normal = normal
+    p.d = -linalg.dot(p.normal, point)
+    return
+}
+
 plane_from_triangle :: proc(using t: Triangle) -> (p: Plane) {
     instrument_proc(.PhysicsConversion)
-    p.normal = normal
-    p.d = -linalg.dot(p.normal, points[0])
+    plane_from_normal_n_point(normal, points[0])
     return
 }
 
 plane_normalized_from_triangle :: proc(using t: Triangle) -> (p: Plane) {
     instrument_proc(.PhysicsConversion)
-    p.normal = linalg.normalize(normal)
-    p.d = -linalg.dot(p.normal, points[0])
+    plane_from_normal_n_point(linalg.normalize(normal), points[0])
     return
 }
 
@@ -523,6 +532,129 @@ collision_ray_instance :: proc(data: PhysicsData, a: Ray, b: Instance) -> Maybe(
         }
         if point, ok := collision(a, triangle).(Vec3); ok {
             return point
+        }
+    }
+    return nil
+}
+
+CollisionData :: struct {
+    point: Vec3,
+    normal: Vec3,
+}
+
+collision_full :: proc{ 
+    collision_ray_aabb_full,
+    collision_ray_sphere_full,
+    collision_ray_triangle_full,
+    collision_ray_instance_full,
+}
+
+collision_ray_sphere_full :: proc(ray: Ray, sphere: Sphere) -> Maybe(CollisionData) {
+    instrument_proc(.PhysicsCollision)
+    centered_origin := ray.origin - sphere.center 
+    // Coeffs of quadratic equation
+    b := linalg.dot(ray.direction, centered_origin)
+    c := linalg.dot(centered_origin, centered_origin) - sphere.radius * sphere.radius
+    // If origin is outside sphere and ray pointing away
+    if c > 0 && b > 0 {
+        return nil
+    }
+    
+    discr := b*b - c
+    if discr < 0 {
+        return nil
+    }
+
+    t := -b - math.sqrt(discr)
+    if t < 0 {
+        t = 0
+    }
+    point := ray.origin + t * ray.direction
+    normal := point - sphere.center
+    return CollisionData { point, normal }
+}
+
+collision_ray_aabb_full :: proc(ray: Ray, aabb: AABB) -> Maybe(CollisionData) {
+    instrument_proc(.PhysicsCollision)
+    tmin: f32 = 0
+    tmax: f32 = math.F32_MAX
+    normal: Vec3
+    for i in 0..<3 {
+        if abs(ray.direction[i]) < EPS {
+            if ray.origin[i] < aabb.minimal[i] || ray.origin[i] > aabb.maximal[i] {
+                return nil
+            }
+            continue
+        }
+        t0 := (aabb.minimal[i] - ray.origin[i]) / ray.direction[i]
+        t1 := (aabb.maximal[i] - ray.origin[i]) / ray.direction[i]
+        if t0 > t1 {
+            t0, t1 = t1, t0
+        }
+        if t0 > tmin {
+            tmin = t0
+            enter_normal: Vec3
+            enter_normal[i] = math.copy_sign(1, ray.direction[i])
+            normal = enter_normal
+        }
+        tmax = min(tmax, t1)
+        if tmax < tmin {
+            return nil
+        }
+    }
+
+    return CollisionData { ray.origin + tmin * ray.direction, normal }
+}
+
+collision_ray_triangle_full :: proc(using ray: Ray, using t: Triangle) -> Maybe(CollisionData) {
+    instrument_proc(.PhysicsCollision)
+    d := linalg.dot(-direction, normal)
+
+    if d <= 0 {
+        return nil
+    }
+
+    ap := origin - points[0]
+    t := linalg.dot(ap, normal)
+    if t < 0 {
+        return nil
+    }
+
+    ac := points[2] - points[0]
+    ed := linalg.cross(-direction, ap)
+    v := linalg.dot(ac, ed)
+    if v < 0 || v > d {
+        return nil
+    }
+    ab := points[1] - points[0]
+    w := -linalg.dot(ab, ed)
+    if w < 0 || v + w > d {
+        return nil
+    }
+    // This may cause some problems
+    // assert(linalg.dot(linalg.cross(ab, ac), normal) < 0)
+    return CollisionData { origin + (t / d) * direction, normal }
+}
+
+collision_ray_instance_full :: proc(data: PhysicsData, a: Ray, b: Instance) -> Maybe(CollisionData) {
+    if !collide(a, data.aabbs[b.instance_id]) {
+       return nil 
+    }
+    model := data.models[b.model_id]
+    triangle_count := len(model.indices) / 3
+    for i in 0..<triangle_count {
+        m_mat := b.model_matrix
+        n_mat := b.normal_matrix
+        triangle := Triangle {
+            {
+                (m_mat * vec4_from_vec3(model.vertices[model.indices[3 * i + 1]], 1)).xyz,
+                (m_mat * vec4_from_vec3(model.vertices[model.indices[3 * i + 2]], 1)).xyz,
+                (m_mat * vec4_from_vec3(model.vertices[model.indices[3 * i + 3]], 1)).xyz,
+            },
+            n_mat * model.normals[model.indices[3 * i]],
+        }
+        if data, ok := collision_full(a, triangle).(CollisionData); ok {
+            return data 
         }
     }
     return nil

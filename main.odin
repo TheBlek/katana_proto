@@ -47,8 +47,6 @@ MOVEMENT_BINDS :: []MovementKeyBind {
     { glfw.KEY_S, VEC3_Z },
     { glfw.KEY_A, VEC3_X_NEG },
     { glfw.KEY_D, VEC3_X },
-    { glfw.KEY_LEFT_SHIFT, VEC3_Y_NEG },
-    { glfw.KEY_SPACE, VEC3_Y },
 }
 
 GameState :: struct {
@@ -144,6 +142,7 @@ main :: proc() {
     player_velocity := Vec3(0)
     player_position := Vec3{0, 10, 25}
     grounded := false
+    ground_normal: Vec3
  
     stopwatch: time.Stopwatch
     pause := true
@@ -155,10 +154,10 @@ main :: proc() {
         downwards := Ray { player_position, VEC3_Y_NEG }
 
         if !pause {
-            if point, ok := collision(state.physics, downwards, terrain).(Vec3); ok {
-                fmt.println(point)
-                if linalg.length(player_position - point) < PLAYER_HEIGHT {
+            if data, ok := collision_full(state.physics, downwards, terrain).(CollisionData); ok {
+                if linalg.length(player_position - data.point) < PLAYER_HEIGHT {
                     grounded = true
+                    ground_normal = data.normal
                     player_velocity.y = 0
                 }
             }
@@ -168,14 +167,28 @@ main :: proc() {
             }
 
             player_position += player_velocity * dt
-            camera.transform.position = player_position
-            fmt.println(player_position)
 
             sight := Ray { camera.transform.position, camera.transform.rotation * VEC3_Z_NEG }
             if point, ok := collision(state.physics, sight, obj2).(Vec3); ok {
                 pointer.transform.position = point
                 instance_update(state, &pointer)
             }
+
+            if grounded {
+                for move in MOVEMENT_BINDS {
+                    key_state := glfw.GetKey(window, move.key)
+                    if key_state == glfw.PRESS { 
+                        ground := plane_from_normal_n_point(ground_normal, player_position)
+                        shifted := player_position + move.vec * dt
+                        to := plane_project_point(ground, shifted)
+                        fmt.println(ground, shifted, to)
+                        player_position = to 
+                    }
+                    prev_key_state[move.key] = key_state
+                }
+            }
+
+            camera.transform.position = player_position
         }
 
         x, y := glfw.GetCursorPos(window)
