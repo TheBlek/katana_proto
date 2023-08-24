@@ -154,6 +154,7 @@ main :: proc() {
         downwards := Ray { player_position, VEC3_Y_NEG }
 
         if !pause {
+            grounded = false
             if data, ok := collision_full(state.physics, downwards, terrain).(CollisionData); ok {
                 if linalg.length(player_position - data.point) < PLAYER_HEIGHT {
                     grounded = true
@@ -179,9 +180,8 @@ main :: proc() {
                     key_state := glfw.GetKey(window, move.key)
                     if key_state == glfw.PRESS { 
                         ground := plane_from_normal_n_point(ground_normal, player_position)
-                        shifted := player_position + move.vec * dt
+                        shifted := player_position + camera.transform.rotation * move.vec * dt
                         to := plane_project_point(ground, shifted)
-                        fmt.println(ground, shifted, to)
                         player_position = to 
                     }
                     prev_key_state[move.key] = key_state
