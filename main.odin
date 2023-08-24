@@ -43,10 +43,10 @@ MovementKeyBind :: struct {
 }
 
 MOVEMENT_BINDS :: []MovementKeyBind {
-    { glfw.KEY_W, VEC3_Z_NEG },
-    { glfw.KEY_S, VEC3_Z },
-    { glfw.KEY_A, VEC3_X_NEG },
-    { glfw.KEY_D, VEC3_X },
+    { glfw.KEY_W, Vec3{0, 0, -10} },
+    { glfw.KEY_S, Vec3{0, 0, 5} },
+    { glfw.KEY_A, Vec3{-3, 0, 0} },
+    { glfw.KEY_D, Vec3{3, 0, 0} },
 }
 
 GameState :: struct {
@@ -173,6 +173,7 @@ main :: proc() {
             if point, ok := collision(state.physics, sight, obj2).(Vec3); ok {
                 pointer.transform.position = point
                 instance_update(state, &pointer)
+                fmt.println(point)
             }
 
             if grounded {

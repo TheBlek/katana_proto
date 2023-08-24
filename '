@@ -484,7 +484,7 @@ collision_ray_aabb :: proc(ray: Ray, aabb: AABB) -> Maybe(Vec3) {
     return ray.origin + tmin * ray.direction
 }
 
-collision_ray_triangle :: proc(using ray: Ray, using triangle: Triangle) -> Maybe(Vec3) {
+collision_ray_triangle :: proc(using ray: Ray, using t: Triangle) -> Maybe(Vec3) {
     instrument_proc(.PhysicsCollision)
     d := linalg.dot(-direction, normal)
 
@@ -499,25 +499,23 @@ collision_ray_triangle :: proc(using ray: Ray, using triangle: Triangle) -> Mayb
     }
 
     ac := points[2] - points[0]
+    ab := points[1] - points[0]
+    fmt.println("Checked")
+    if linalg.dot(linalg.cross(ab, ac), normal) < 0 {
+        ac, ab = ab, ac
+        fmt.println("Swapped!")
+    }
     ed := linalg.cross(-direction, ap)
     v := linalg.dot(ac, ed)
     if v < 0 || v > d {
         return nil
     }
-    ab := points[1] - points[0]
     w := -linalg.dot(ab, ed)
     if w < 0 || v + w > d {
         return nil
     }
     // This may cause some problems
-    // assert(linalg.length(linalg.cross(ab, ac)) > 0, "Triangle normal is a point")
-    // assert(linalg.dot(linalg.cross(ab, ac), normal) > 0, "Cached normal is wrong for calcs")
-    fmt.println(triangle, ray)
-    plane := plane_from_triangle(triangle)
-    point := origin + (t / d) * direction
-    fmt.println(v, w, 1 - v - w)
-    fmt.println(point, linalg.dot(plane.normal, point) + plane.d)
-    fmt.println(linalg.normalize(linalg.cross(ab, ac)))
+    assert(linalg.dot(linalg.cross(ab, ac), normal) > 0)
     return origin + (t / d) * direction
 }
 
@@ -531,21 +529,12 @@ collision_ray_instance :: proc(data: PhysicsData, a: Ray, b: Instance) -> Maybe(
         m_mat := b.model_matrix
         n_mat := b.normal_matrix
         triangle := Triangle {
-            points = {
-                (m_mat * vec4_from_vec3(model.vertices[model.indices[3 * i]], 1)).xyz,
+            {
                 (m_mat * vec4_from_vec3(model.vertices[model.indices[3 * i + 1]], 1)).xyz,
                 (m_mat * vec4_from_vec3(model.vertices[model.indices[3 * i + 2]], 1)).xyz,
+                (m_mat * vec4_from_vec3(model.vertices[model.indices[3 * i + 3]], 1)).xyz,
             },
-        }
-        normal := n_mat * model.normals[model.indices[3 * i]]
-        triangle.normal = linalg.cross(
-            triangle.points[1] - triangle.points[0],
-            triangle.points[2] - triangle.points[0],
-        )
-        if linalg.dot(normal, triangle.normal) < 0 {
-            fmt.println("Expensive operation!")
-            slice.swap(triangle.points[:], 1, 2)
-            triangle.normal *= -1
+            n_mat * model.normals[model.indices[3 * i]],
         }
         if point, ok := collision(a, triangle).(Vec3); ok {
             return point
