@@ -36,6 +36,7 @@ INSTRUMENT :: false
 
 GRAVITY :: Vec3 {0, -9.81, 0}
 PLAYER_HEIGHT :: 1.9
+PLAYER_RUN_MULTIPLIER :: 1.5
 
 MovementKeyBind :: struct {
     key: i32,
@@ -177,11 +178,18 @@ main :: proc() {
             }
 
             if grounded {
+                shift := glfw.GetKey(window, glfw.KEY_LEFT_SHIFT)
+                prev_key_state[glfw.KEY_LEFT_SHIFT] = shift
+                multiplier: f32 = 1.0
+                if shift == glfw.PRESS {
+                    multiplier = PLAYER_RUN_MULTIPLIER
+                }
+
                 for move in MOVEMENT_BINDS {
                     key_state := glfw.GetKey(window, move.key)
                     if key_state == glfw.PRESS { 
                         ground := plane_from_normal_n_point(ground_normal, player_position)
-                        shifted := player_position + camera.transform.rotation * move.vec * dt
+                        shifted := player_position + camera.transform.rotation * move.vec * multiplier * dt
                         to := plane_project_point(ground, shifted)
                         player_position = to 
                     }
