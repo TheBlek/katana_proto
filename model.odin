@@ -27,11 +27,12 @@ Model :: struct {
 Instance :: struct {
     model_id: int,
     instance_id: int,
-    transform: Transform,
+    using transform: Transform,
     scale: Vec3,
     model_matrix: Mat4,
     normal_matrix: Mat3,
     color: Vec3,
+    children: [dynamic]^Instance,
 }
 
 UNIT_CUBE :: Model {
@@ -129,11 +130,18 @@ scale_matrix :: proc(scale: Vec3) -> (result: Mat4) {
     return 
 }
 
-instance_update :: proc(state: GameState, using instance: ^Instance) {
-    model_matrix = disposition_matrix(transform) * scale_matrix(scale)
+instance_update :: proc(state: GameState, using instance: ^Instance, parent_mat := MAT4_IDENTITY) {
+    pm := parent_mat
+    model_matrix = pm * disposition_matrix(transform) * scale_matrix(scale)
     normal_matrix = linalg.matrix3_from_matrix4(inverse_transpose(model_matrix))
     state.physics.aabbs[instance_id] = aabb_from_instance(state.physics, instance^)
     instance_update_data(state, instance^)
+    fmt.println("Updating children!")
+    for child in children {
+        fmt.println(child, model_matrix)
+        instance_update(state, child, model_matrix)
+        fmt.println(child)
+    }
 }
 
 instance_update_data :: proc(state: GameState, instance: Instance) {

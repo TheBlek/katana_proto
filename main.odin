@@ -6,7 +6,6 @@ import "core:math"
 import "core:time"
 import "vendor:glfw"
 import gl "vendor:OpenGL"
-
 Vec2 :: linalg.Vector2f32
 Vec3 :: linalg.Vector3f32
 Vec4 :: linalg.Vector4f32
@@ -111,7 +110,7 @@ main :: proc() {
     }
     katana_model_id := register_model(&state, katana_model)
 
-    katana := instance_create(&state, katana_model_id, scale = 0.5, position = Vec3{-10, 2, 0})
+    katana := instance_create(&state, katana_model_id, scale = 0.2, position = {0, 0, -5})
     instance_update(state, &katana)
 
     terrain_model_id := register_model(&state, get_terrain(100, 100, 6, 200, 1))
@@ -135,13 +134,15 @@ main :: proc() {
     append(&state.renderer.point_lights, PointLight { strength = 1, color = Vec3{1, 1, 0}, constant = 1, linear = 0.09, quadratic = 0.032 })
     // light := &state.renderer.point_lights[0]
 
+    player := instance_create(&state, capsule_id, position = {0, 10, 25})
+    append(&player.children, &katana)
+
     prev_key_state: map[i32]i32
     prev_mouse_pos: Vec2
     pitch, yaw: f32
     mouse_sensitivity:f32 = 0.01
 
     player_velocity := Vec3(0)
-    player_position := Vec3{0, 10, 25}
     grounded := false
     ground_normal: Vec3
  
@@ -152,12 +153,12 @@ main :: proc() {
         time.stopwatch_reset(&stopwatch)
         time.stopwatch_start(&stopwatch)
         // Game logic
-        downwards := Ray { player_position, VEC3_Y_NEG }
+        downwards := Ray { player.position, VEC3_Y_NEG }
 
         if !pause {
             grounded = false
             if data, ok := collision_full(state.physics, downwards, terrain).(CollisionData); ok {
-                if linalg.length(player_position - data.point) < PLAYER_HEIGHT {
+                if linalg.length(player.position - data.point) < PLAYER_HEIGHT {
                     grounded = true
                     ground_normal = data.normal
                     player_velocity.y = 0
@@ -168,13 +169,12 @@ main :: proc() {
                 player_velocity += GRAVITY * dt
             }
 
-            player_position += player_velocity * dt
+            player.position += player_velocity * dt
 
             sight := Ray { camera.transform.position, camera.transform.rotation * VEC3_Z_NEG }
             if point, ok := collision(state.physics, sight, obj2).(Vec3); ok {
-                pointer.transform.position = point
+                pointer.position = point
                 instance_update(state, &pointer)
-                fmt.println(point)
             }
 
             if grounded {
@@ -188,16 +188,14 @@ main :: proc() {
                 for move in MOVEMENT_BINDS {
                     key_state := glfw.GetKey(window, move.key)
                     if key_state == glfw.PRESS { 
-                        ground := plane_from_normal_n_point(ground_normal, player_position)
-                        shifted := player_position + camera.transform.rotation * move.vec * multiplier * dt
+                        ground := plane_from_normal_n_point(ground_normal, player.position)
+                        shifted := player.position + camera.transform.rotation * move.vec * multiplier * dt
                         to := plane_project_point(ground, shifted)
-                        player_position = to 
+                        player.position = to 
                     }
                     prev_key_state[move.key] = key_state
                 }
             }
-
-            camera.transform.position = player_position
         }
 
         x, y := glfw.GetCursorPos(window)
@@ -212,7 +210,12 @@ main :: proc() {
             camera.transform.rotation = linalg.matrix3_from_yaw_pitch_roll(yaw, pitch, 0)
             prev_mouse_pos = Vec2{f32(x), f32(y)}
         }
+        camera.transform.position = player.position
+        player.rotation = camera.transform.rotation
         camera_update(&camera)
+        if !pause {
+            instance_update(state, &player)
+        }
 
         e_state := glfw.GetKey(window, glfw.KEY_E)
         if e_state == glfw.PRESS && prev_key_state[glfw.KEY_E] == glfw.RELEASE {

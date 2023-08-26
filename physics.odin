@@ -509,15 +509,6 @@ collision_ray_triangle :: proc(using ray: Ray, using triangle: Triangle) -> Mayb
     if w < 0 || v + w > d {
         return nil
     }
-    // This may cause some problems
-    // assert(linalg.length(linalg.cross(ab, ac)) > 0, "Triangle normal is a point")
-    // assert(linalg.dot(linalg.cross(ab, ac), normal) > 0, "Cached normal is wrong for calcs")
-    fmt.println(triangle, ray)
-    plane := plane_from_triangle(triangle)
-    point := origin + (t / d) * direction
-    fmt.println(v, w, 1 - v - w)
-    fmt.println(point, linalg.dot(plane.normal, point) + plane.d)
-    fmt.println(linalg.normalize(linalg.cross(ab, ac)))
     return origin + (t / d) * direction
 }
 
@@ -543,7 +534,8 @@ collision_ray_instance :: proc(data: PhysicsData, a: Ray, b: Instance) -> Maybe(
             triangle.points[2] - triangle.points[0],
         )
         if linalg.dot(normal, triangle.normal) < 0 {
-            fmt.println("Expensive operation!")
+            // TODO(theblek): move this promise to model level
+            // fmt.println("Expensive operation!")
             slice.swap(triangle.points[:], 1, 2)
             triangle.normal *= -1
         }
@@ -663,12 +655,22 @@ collision_ray_instance_full :: proc(data: PhysicsData, a: Ray, b: Instance) -> M
         m_mat := b.model_matrix
         n_mat := b.normal_matrix
         triangle := Triangle {
-            {
+            points = {
+                (m_mat * vec4_from_vec3(model.vertices[model.indices[3 * i]], 1)).xyz,
                 (m_mat * vec4_from_vec3(model.vertices[model.indices[3 * i + 1]], 1)).xyz,
                 (m_mat * vec4_from_vec3(model.vertices[model.indices[3 * i + 2]], 1)).xyz,
-                (m_mat * vec4_from_vec3(model.vertices[model.indices[3 * i + 3]], 1)).xyz,
             },
-            n_mat * model.normals[model.indices[3 * i]],
+        }
+        normal := n_mat * model.normals[model.indices[3 * i]]
+        triangle.normal = linalg.cross(
+            triangle.points[1] - triangle.points[0],
+            triangle.points[2] - triangle.points[0],
+        )
+        if linalg.dot(normal, triangle.normal) < 0 {
+            // TODO(theblek): move this promise to model level
+            // fmt.println("Expensive operation!")
+            slice.swap(triangle.points[:], 1, 2)
+            triangle.normal *= -1
         }
         if data, ok := collision_full(a, triangle).(CollisionData); ok {
             return data 
