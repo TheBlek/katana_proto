@@ -137,6 +137,9 @@ main :: proc() {
     player := instance_create(&state, capsule_id, position = {0, 10, 25})
     append(&player.children, &katana)
 
+    enemies: [dynamic]^Instance
+    append(&enemies, &obj2)
+
     prev_key_state: map[i32]i32
     prev_mouse_pos: Vec2
     pitch, yaw: f32
@@ -196,26 +199,31 @@ main :: proc() {
                     prev_key_state[move.key] = key_state
                 }
             }
-        }
+            x, y := glfw.GetCursorPos(window)
+            diff := Vec2{f32(x), f32(y)}  - prev_mouse_pos
+            if linalg.length(diff) > EPS {
+                offset := diff * mouse_sensitivity
 
-        x, y := glfw.GetCursorPos(window)
-        diff := Vec2{f32(x), f32(y)}  - prev_mouse_pos
-        if linalg.length(diff) > EPS {
-            offset := diff * mouse_sensitivity
+                pitch -= offset.y
+                yaw -= offset.x
+                pitch = clamp(pitch, -math.PI/2 - 0.1, math.PI/2 - 0.1)
 
-            pitch -= offset.y
-            yaw -= offset.x
-            pitch = clamp(pitch, -math.PI/2 - 0.1, math.PI/2 - 0.1)
-
-            camera.transform.rotation = linalg.matrix3_from_yaw_pitch_roll(yaw, pitch, 0)
-            prev_mouse_pos = Vec2{f32(x), f32(y)}
-        }
-        camera.transform.position = player.position
-        player.rotation = camera.transform.rotation
-        camera_update(&camera)
-        if !pause {
+                camera.transform.rotation = linalg.matrix3_from_yaw_pitch_roll(yaw, pitch, 0)
+                prev_mouse_pos = Vec2{f32(x), f32(y)}
+            }
+            camera.transform.position = player.position
+            player.rotation = camera.transform.rotation
+            camera_update(&camera)
             instance_update(state, &player)
+
+            for enemy, i in enemies {
+                if collide(state.physics, katana, enemy^) {
+                    unordered_remove(&enemies, i)
+                    fmt.println("Removed!")
+                }
+            }
         }
+
 
         e_state := glfw.GetKey(window, glfw.KEY_E)
         if e_state == glfw.PRESS && prev_key_state[glfw.KEY_E] == glfw.RELEASE {
@@ -229,8 +237,10 @@ main :: proc() {
         renderer_draw_instance(&state.renderer, camera, &katana)
         renderer_draw_instance(&state.renderer, camera, &terrain)
         renderer_draw_instance(&state.renderer, camera, &obj1)
-        renderer_draw_instance(&state.renderer, camera, &obj2)
         renderer_draw_instance(&state.renderer, camera, &pointer)
+        for enemy in enemies {
+            renderer_draw_instance(&state.renderer, camera, enemy)
+        }
         glfw.SwapBuffers(window)
         
         glfw.PollEvents()

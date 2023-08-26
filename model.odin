@@ -136,11 +136,8 @@ instance_update :: proc(state: GameState, using instance: ^Instance, parent_mat 
     normal_matrix = linalg.matrix3_from_matrix4(inverse_transpose(model_matrix))
     state.physics.aabbs[instance_id] = aabb_from_instance(state.physics, instance^)
     instance_update_data(state, instance^)
-    fmt.println("Updating children!")
     for child in children {
-        fmt.println(child, model_matrix)
         instance_update(state, child, model_matrix)
-        fmt.println(child)
     }
 }
 

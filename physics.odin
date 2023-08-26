@@ -51,16 +51,14 @@ plane_from_normal_n_point :: proc(normal: Vec3, point: Vec3) -> (p: Plane) {
     return
 }
 
-plane_from_triangle :: proc(using t: Triangle) -> (p: Plane) {
+plane_from_triangle :: proc(using t: Triangle) -> Plane {
     instrument_proc(.PhysicsConversion)
-    plane_from_normal_n_point(normal, points[0])
-    return
+    return plane_from_normal_n_point(normal, points[0])
 }
 
-plane_normalized_from_triangle :: proc(using t: Triangle) -> (p: Plane) {
+plane_normalized_from_triangle :: proc(using t: Triangle) -> Plane {
     instrument_proc(.PhysicsConversion)
-    plane_from_normal_n_point(linalg.normalize(normal), points[0])
-    return
+    return plane_from_normal_n_point(linalg.normalize(normal), points[0])
 }
 
 aabb_from_instance :: proc(cache: PhysicsData, using instance: Instance) -> AABB {
@@ -249,6 +247,7 @@ collide_triangle_triangle :: proc(a, b: Triangle) -> bool {
     }
     // Precision problems. Floating point arithmetic
     if abs(sdistb[0]) < EPS && abs(sdistb[1]) < EPS && abs(sdistb[2]) < EPS {
+        fmt.println(a, b, sdistb)
         panic("Coplanar case is not handled")
     }
     if sdistb[0] * sdistb[1] > 0 && sdistb[1] * sdistb[2] > 0 { 
