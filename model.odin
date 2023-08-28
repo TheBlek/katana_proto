@@ -6,6 +6,7 @@ import "core:encoding/json"
 import "core:os"
 import "core:path/filepath"
 import "core:fmt"
+import "core:slice"
 
 Texture :: struct {
     filename: string,
@@ -130,7 +131,36 @@ scale_matrix :: proc(scale: Vec3) -> (result: Mat4) {
     return 
 }
 
+model_register :: proc(state: ^GameState, m: Model) -> (id: int) {
+    instrument_proc(.ModelMisc)
+    id = len(state.models)
+    append(&state.models, m)
+
+    model := &state.models[id]
+    triangle_count := len(model.indices) / 3
+    for i in 0..<triangle_count {
+        triangle := Triangle {
+            points = {
+                model.vertices[model.indices[3 * i]],
+                model.vertices[model.indices[3 * i + 1]],
+                model.vertices[model.indices[3 * i + 2]],
+            },
+        }
+        normal := model.normals[model.indices[3 * i]]
+        triangle.normal = linalg.cross(
+            triangle.points[1] - triangle.points[0],
+            triangle.points[2] - triangle.points[0],
+        )
+        if linalg.dot(normal, triangle.normal) < 0 {
+            slice.swap(model.indices, 3*i + 1, 3*i + 2)
+            triangle.normal *= -1
+        }
+    }
+    return id
+}
+
 instance_update :: proc(state: GameState, using instance: ^Instance, parent_mat := MAT4_IDENTITY) {
+    instrument_proc(.ModelInstance)
     pm := parent_mat
     model_matrix = pm * disposition_matrix(transform) * scale_matrix(scale)
     normal_matrix = linalg.matrix3_from_matrix4(inverse_transpose(model_matrix))
@@ -142,7 +172,7 @@ instance_update :: proc(state: GameState, using instance: ^Instance, parent_mat 
 }
 
 instance_update_data :: proc(state: GameState, instance: Instance) {
-    instrument_proc(.Render)
+    instrument_proc(.ModelInstance)
     model := &state.models[instance.model_id]
 
     assert(

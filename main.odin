@@ -31,7 +31,7 @@ COLOR_RED :: VEC3_X
 COLOR_GREEN :: VEC3_Y
 COLOR_BLUE :: VEC3_Z
 
-INSTRUMENT :: false
+INSTRUMENT :: true
 
 GRAVITY :: Vec3 {0, -9.81, 0}
 PLAYER_HEIGHT :: 1.9
@@ -54,12 +54,6 @@ GameState :: struct {
     instance_count: int,
     renderer: Renderer,
     physics: PhysicsData, 
-}
-
-register_model :: proc(state: ^GameState, m: Model) -> (res: int) {
-    res = len(state.models)
-    append(&state.models, m)
-    return
 }
 
 vec4_from_vec3 :: proc(vec: Vec3, w: f32) -> Vec4 {
@@ -108,25 +102,25 @@ main :: proc() {
                 { filename="./resources/katana_specular.png" },
             }
     }
-    katana_model_id := register_model(&state, katana_model)
+    katana_model_id := model_register(&state, katana_model)
 
     katana := instance_create(&state, katana_model_id, scale = 0.2, position = {0, 0, -5})
     instance_update(state, &katana)
 
-    terrain_model_id := register_model(&state, get_terrain(100, 100, 6, 200, 1))
+    terrain_model_id := model_register(&state, get_terrain(100, 100, 6, 200, 1))
     terrain := instance_create(&state, terrain_model_id, color = Vec3{0.659, 0.392, 0.196})
     instance_update(state, &terrain)
     // terrain_partition := partition_grid_from_instance(state.physics, 1, 101, terrain)
 
-    cube_id := register_model(&state, UNIT_CUBE)
+    cube_id := model_register(&state, UNIT_CUBE)
     obj1 := instance_create(&state, cube_id, position = {2.2, 15, 0}, color = COLOR_RED)
     instance_update(state, &obj1)
 
-    capsule_id := register_model(&state, UNIT_CAPSULE)
+    capsule_id := model_register(&state, UNIT_CAPSULE)
     obj2 := instance_create(&state, capsule_id, position = {2, 8, -0.8}, color = COLOR_RED)
     instance_update(state, &obj2)
 
-    sphere_id := register_model(&state, UNIT_SPHERE)
+    sphere_id := model_register(&state, UNIT_SPHERE)
     pointer := instance_create(&state, sphere_id, scale = 0.05, color = COLOR_BLUE)
     instance_update(state, &pointer)
 
@@ -248,7 +242,7 @@ main :: proc() {
         dt = cast(f32)time.duration_seconds(time.stopwatch_duration(stopwatch))
         fmt.println(dt * 1000)
         when INSTRUMENT {
-            fmt.println(stats.render.draw, stats.physics.collision_test)
+            fmt.printf("%#v", stats)
             stats = {}
         }
         fmt.println("End of frame")

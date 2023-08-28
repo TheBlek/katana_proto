@@ -645,6 +645,7 @@ collision_ray_triangle_full :: proc(using ray: Ray, using t: Triangle) -> Maybe(
 }
 
 collision_ray_instance_full :: proc(data: PhysicsData, a: Ray, b: Instance) -> Maybe(CollisionData) {
+    instrument_proc(.PhysicsCollision)
     if !collide(a, data.aabbs[b.instance_id]) {
        return nil 
     }
@@ -652,7 +653,6 @@ collision_ray_instance_full :: proc(data: PhysicsData, a: Ray, b: Instance) -> M
     triangle_count := len(model.indices) / 3
     for i in 0..<triangle_count {
         m_mat := b.model_matrix
-        n_mat := b.normal_matrix
         triangle := Triangle {
             points = {
                 (m_mat * vec4_from_vec3(model.vertices[model.indices[3 * i]], 1)).xyz,
@@ -660,17 +660,10 @@ collision_ray_instance_full :: proc(data: PhysicsData, a: Ray, b: Instance) -> M
                 (m_mat * vec4_from_vec3(model.vertices[model.indices[3 * i + 2]], 1)).xyz,
             },
         }
-        normal := n_mat * model.normals[model.indices[3 * i]]
         triangle.normal = linalg.cross(
             triangle.points[1] - triangle.points[0],
             triangle.points[2] - triangle.points[0],
         )
-        if linalg.dot(normal, triangle.normal) < 0 {
-            // TODO(theblek): move this promise to model level
-            // fmt.println("Expensive operation!")
-            slice.swap(triangle.points[:], 1, 2)
-            triangle.normal *= -1
-        }
         if data, ok := collision_full(a, triangle).(CollisionData); ok {
             return data 
         }
