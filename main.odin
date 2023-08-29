@@ -51,6 +51,23 @@ MOVEMENT_BINDS :: []MovementKeyBind {
 
 KATANA_MOVEMENT_BIND :: glfw.KEY_LEFT_ALT
 
+MOUSE_SENSITIVITY :: 0.001
+KATANA_SENSITIVITY :: 0.001
+KATANA_ANGLES :: [2][2]f32 {
+    {-linalg.PI/2, linalg.PI/2},
+    {-linalg.PI/2, linalg.PI/2},
+}
+KATANA_SPREAD :: [2][2]f32 {
+    {-2, 2},
+    {-1, 2},
+}
+KATANA_BASE_POSITION :: Vec3{0, -2, -3}
+KATANA_BASE_ROTATION :: matrix[3, 3]f32{
+    -0.000, 1.000, 0.000,
+    1.000, 0.000, 0.000,
+    0.000, 0.000, -1.000,
+}
+
 GameState :: struct {
     models: [dynamic]Model,
     instance_count: int,
@@ -110,8 +127,8 @@ main :: proc() {
         &state,
         katana_model_id,
         scale = 0.1,
-        position = {0, -2, -5},
-        rotation = linalg.matrix3_from_euler_angles_zx_f32(-linalg.PI / 2, linalg.PI),
+        position = KATANA_BASE_POSITION,
+        rotation = KATANA_BASE_ROTATION,
     )
     instance_update(state, &katana)
 
@@ -145,8 +162,6 @@ main :: proc() {
     prev_key_state: map[i32]i32
     prev_mouse_pos: Vec2
     pitch, yaw: f32
-    mouse_sensitivity:f32 = 0.001
-    katana_sensitivity:f32 = 0.001
 
     player_velocity := Vec3(0)
     grounded := false
@@ -206,7 +221,7 @@ main :: proc() {
             x, y := glfw.GetCursorPos(window)
             diff := Vec2{f32(x), f32(y)}  - prev_mouse_pos
             if glfw.GetKey(window, KATANA_MOVEMENT_BIND) != glfw.PRESS {
-                offset := diff * mouse_sensitivity
+                offset := diff * MOUSE_SENSITIVITY
 
                 pitch -= offset.y
                 yaw -= offset.x
@@ -214,10 +229,28 @@ main :: proc() {
 
                 camera.transform.rotation = linalg.matrix3_from_yaw_pitch_roll(yaw, pitch, 0)
             } else {
-                katana.position.x += diff.x * katana_sensitivity
-                katana.position.x = clamp(katana.position.x, -2, 2)
-                katana.position.y -= diff.y * katana_sensitivity
-                katana.position.y = clamp(katana.position.y, -3, 0)
+                katana.position.x += diff.x * KATANA_SENSITIVITY
+                katana.position.x = clamp(
+                    katana.position.x,
+                    KATANA_BASE_POSITION.x + KATANA_SPREAD.x[0],
+                    KATANA_BASE_POSITION.x + KATANA_SPREAD.x[1],
+                )
+                katana.position.y -= diff.y * KATANA_SENSITIVITY
+                katana.position.y = clamp(
+                    katana.position.y,
+                    KATANA_BASE_POSITION.y + KATANA_SPREAD.y[0],
+                    KATANA_BASE_POSITION.y + KATANA_SPREAD.y[1],
+                )
+                xt := (KATANA_SPREAD.x[1] + KATANA_BASE_POSITION.x - katana.position.x) / 
+                    (KATANA_SPREAD.x[1] - KATANA_SPREAD.x[0])
+
+                yt := (KATANA_SPREAD.y[1] + KATANA_BASE_POSITION.y - katana.position.y) / 
+                    (KATANA_SPREAD.y[1] - KATANA_SPREAD.y[0])
+                fmt.println(xt, yt)
+                katana.rotation = linalg.matrix3_from_euler_angles_xz(
+                    math.lerp(KATANA_ANGLES.x[0], KATANA_ANGLES.x[1], xt),
+                    math.lerp(KATANA_ANGLES.y[0], KATANA_ANGLES.y[1], yt),
+                ) * KATANA_BASE_ROTATION
             }
             prev_mouse_pos = Vec2{f32(x), f32(y)}
             camera.transform.position = player.position
@@ -232,7 +265,6 @@ main :: proc() {
                 }
             }
         }
-
 
         e_state := glfw.GetKey(window, glfw.KEY_E)
         if e_state == glfw.PRESS && prev_key_state[glfw.KEY_E] == glfw.RELEASE {
@@ -255,11 +287,11 @@ main :: proc() {
         glfw.PollEvents()
         time.stopwatch_stop(&stopwatch)
         dt = cast(f32)time.duration_seconds(time.stopwatch_duration(stopwatch))
-        fmt.println(dt * 1000)
         when INSTRUMENT {
-            fmt.printf("%#v", stats)
+            fmt.println("Total: ", dt * 1000, "ms")
+            fmt.printf("%#v\n", stats)
             stats = {}
+            fmt.println("End of frame")
         }
-        fmt.println("End of frame")
     }
 }
