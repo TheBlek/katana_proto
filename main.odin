@@ -31,7 +31,7 @@ COLOR_RED :: VEC3_X
 COLOR_GREEN :: VEC3_Y
 COLOR_BLUE :: VEC3_Z
 
-INSTRUMENT :: true
+INSTRUMENT :: false
 
 GRAVITY :: Vec3 {0, -9.81, 0}
 PLAYER_HEIGHT :: 1.9
@@ -48,6 +48,8 @@ MOVEMENT_BINDS :: []MovementKeyBind {
     { glfw.KEY_A, Vec3{-3, 0, 0} },
     { glfw.KEY_D, Vec3{3, 0, 0} },
 }
+
+KATANA_MOVEMENT_BIND :: glfw.KEY_LEFT_ALT
 
 GameState :: struct {
     models: [dynamic]Model,
@@ -104,7 +106,13 @@ main :: proc() {
     }
     katana_model_id := model_register(&state, katana_model)
 
-    katana := instance_create(&state, katana_model_id, scale = 0.2, position = {0, 0, -5})
+    katana := instance_create(
+        &state,
+        katana_model_id,
+        scale = 0.1,
+        position = {0, -2, -5},
+        rotation = linalg.matrix3_from_euler_angles_zx_f32(-linalg.PI / 2, linalg.PI),
+    )
     instance_update(state, &katana)
 
     terrain_model_id := model_register(&state, get_terrain(100, 100, 6, 200, 1))
@@ -138,6 +146,7 @@ main :: proc() {
     prev_mouse_pos: Vec2
     pitch, yaw: f32
     mouse_sensitivity:f32 = 0.01
+    katana_sensitivity:f32 = 0.001
 
     player_velocity := Vec3(0)
     grounded := false
@@ -193,18 +202,28 @@ main :: proc() {
                     prev_key_state[move.key] = key_state
                 }
             }
+
             x, y := glfw.GetCursorPos(window)
             diff := Vec2{f32(x), f32(y)}  - prev_mouse_pos
-            if linalg.length(diff) > EPS {
-                offset := diff * mouse_sensitivity
+            if glfw.GetKey(window, KATANA_MOVEMENT_BIND) != glfw.PRESS {
+                if linalg.length(diff) > EPS {
+                    offset := diff * mouse_sensitivity
 
-                pitch -= offset.y
-                yaw -= offset.x
-                pitch = clamp(pitch, -math.PI/2 - 0.1, math.PI/2 - 0.1)
+                    pitch -= offset.y
+                    yaw -= offset.x
+                    pitch = clamp(pitch, -math.PI/2 - 0.1, math.PI/2 - 0.1)
 
-                camera.transform.rotation = linalg.matrix3_from_yaw_pitch_roll(yaw, pitch, 0)
-                prev_mouse_pos = Vec2{f32(x), f32(y)}
+                    camera.transform.rotation = linalg.matrix3_from_yaw_pitch_roll(yaw, pitch, 0)
+                }
+            } else {
+                if abs(diff.x) > 5 || abs(diff.y) > 5 {
+                    katana.position.x += diff.x * katana_sensitivity
+                    katana.position.x = clamp(katana.position.x, -2, 2)
+                    katana.position.y -= diff.y * katana_sensitivity
+                    katana.position.y = clamp(katana.position.y, -3, 0)
+                }
             }
+            prev_mouse_pos = Vec2{f32(x), f32(y)}
             camera.transform.position = player.position
             player.rotation = camera.transform.rotation
             camera_update(&camera)

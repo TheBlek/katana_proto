@@ -649,10 +649,10 @@ collision_ray_instance_full :: proc(data: PhysicsData, a: Ray, b: Instance) -> M
     if !collide(a, data.aabbs[b.instance_id]) {
        return nil 
     }
-    model := data.models[b.model_id]
+    model := &data.models[b.model_id]
     triangle_count := len(model.indices) / 3
+    m_mat := b.model_matrix
     for i in 0..<triangle_count {
-        m_mat := b.model_matrix
         triangle := Triangle {
             points = {
                 (m_mat * vec4_from_vec3(model.vertices[model.indices[3 * i]], 1)).xyz,
