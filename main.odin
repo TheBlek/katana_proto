@@ -145,7 +145,7 @@ main :: proc() {
     prev_key_state: map[i32]i32
     prev_mouse_pos: Vec2
     pitch, yaw: f32
-    mouse_sensitivity:f32 = 0.01
+    mouse_sensitivity:f32 = 0.001
     katana_sensitivity:f32 = 0.001
 
     player_velocity := Vec3(0)
@@ -206,22 +206,18 @@ main :: proc() {
             x, y := glfw.GetCursorPos(window)
             diff := Vec2{f32(x), f32(y)}  - prev_mouse_pos
             if glfw.GetKey(window, KATANA_MOVEMENT_BIND) != glfw.PRESS {
-                if linalg.length(diff) > EPS {
-                    offset := diff * mouse_sensitivity
+                offset := diff * mouse_sensitivity
 
-                    pitch -= offset.y
-                    yaw -= offset.x
-                    pitch = clamp(pitch, -math.PI/2 - 0.1, math.PI/2 - 0.1)
+                pitch -= offset.y
+                yaw -= offset.x
+                pitch = clamp(pitch, -math.PI/2 - 0.1, math.PI/2 - 0.1)
 
-                    camera.transform.rotation = linalg.matrix3_from_yaw_pitch_roll(yaw, pitch, 0)
-                }
+                camera.transform.rotation = linalg.matrix3_from_yaw_pitch_roll(yaw, pitch, 0)
             } else {
-                if abs(diff.x) > 5 || abs(diff.y) > 5 {
-                    katana.position.x += diff.x * katana_sensitivity
-                    katana.position.x = clamp(katana.position.x, -2, 2)
-                    katana.position.y -= diff.y * katana_sensitivity
-                    katana.position.y = clamp(katana.position.y, -3, 0)
-                }
+                katana.position.x += diff.x * katana_sensitivity
+                katana.position.x = clamp(katana.position.x, -2, 2)
+                katana.position.y -= diff.y * katana_sensitivity
+                katana.position.y = clamp(katana.position.y, -3, 0)
             }
             prev_mouse_pos = Vec2{f32(x), f32(y)}
             camera.transform.position = player.position
