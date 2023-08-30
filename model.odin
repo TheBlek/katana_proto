@@ -235,7 +235,7 @@ model_load_from_file :: proc(path: string) -> (model: Model, ok := true) {
             target_path := filepath.join({filepath.dir(path), filename})
 
             data, ok := os.read_entire_file_from_filename(target_path)
-            assert(ok)
+            fmt.assertf(ok, "Failed to read file: %v", target_path)
 
             offset := cast(int) bufferview["byteOffset"].(json.Float)
             if off := accessor["byteOffset"]; off != nil {

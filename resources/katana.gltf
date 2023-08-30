@@ -53,29 +53,29 @@
 		{
 			"bufferView":0,
 			"componentType":5126,
-			"count":790,
+			"count":793,
 			"max":[
-				57.86247253417969,
+				74.7100601196289,
 				2.2758431434631348,
-				2.124478816986084
+				-0.2630190849304199
 			],
 			"min":[
-				-3.7306180000305176,
+				13.116971969604492,
 				-2.2758431434631348,
-				-9.510711669921875
+				-11.898209571838379
 			],
 			"type":"VEC3"
 		},
 		{
 			"bufferView":1,
 			"componentType":5126,
-			"count":790,
+			"count":793,
 			"type":"VEC2"
 		},
 		{
 			"bufferView":2,
 			"componentType":5126,
-			"count":790,
+			"count":793,
 			"type":"VEC3"
 		},
 		{
@@ -88,32 +88,32 @@
 	"bufferViews":[
 		{
 			"buffer":0,
-			"byteLength":9480,
+			"byteLength":9516,
 			"byteOffset":0,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":6320,
-			"byteOffset":9480,
+			"byteLength":6344,
+			"byteOffset":9516,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":9480,
-			"byteOffset":15800,
+			"byteLength":9516,
+			"byteOffset":15860,
 			"target":34962
 		},
 		{
 			"buffer":0,
 			"byteLength":2688,
-			"byteOffset":25280,
+			"byteOffset":25376,
 			"target":34963
 		}
 	],
 	"buffers":[
 		{
-			"byteLength":27968,
+			"byteLength":28064,
 			"uri":"katana.bin"
 		}
 	]

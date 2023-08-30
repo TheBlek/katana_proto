@@ -55,7 +55,7 @@ MOUSE_SENSITIVITY :: 0.001
 KATANA_SENSITIVITY :: 0.001
 KATANA_ANGLES :: [2][2]f32 {
     {-linalg.PI/2, linalg.PI/2},
-    {linalg.PI/2, -linalg.PI/2},
+    {-linalg.PI/2, linalg.PI/2},
 }
 KATANA_SPREAD :: [2][2]f32 {
     {-2, 2},
@@ -241,22 +241,22 @@ main :: proc() {
                     KATANA_BASE_POSITION.y + KATANA_SPREAD.y[0],
                     KATANA_BASE_POSITION.y + KATANA_SPREAD.y[1],
                 )
-                xt := 0.5 * clamp(
-                    (katana.position.x - KATANA_BASE_POSITION.x) / abs(KATANA_SPREAD.x[1]),
+                xt := clamp(
+                    (katana.position.x - KATANA_BASE_POSITION.x) / KATANA_SPREAD.x[1],
                     0, 1,
-                ) + 0.5 * clamp(
-                    1 - (KATANA_BASE_POSITION.x - katana.position.x) / abs(KATANA_SPREAD.x[0]),
+                ) + clamp(
+                    (KATANA_BASE_POSITION.x - katana.position.x) / KATANA_SPREAD.x[0],
                     0, 1,
                 )
 
-                yt := 0.5 * clamp(
-                    (katana.position.y - KATANA_BASE_POSITION.y) / abs(KATANA_SPREAD.y[1]),
+                yt := clamp(
+                    (KATANA_SPREAD.y[1] + KATANA_BASE_POSITION.y - katana.position.y) / KATANA_SPREAD.y[1],
                     0, 1,
-                ) + 0.5 * clamp(
-                    1 - (KATANA_BASE_POSITION.y - katana.position.y) / abs(KATANA_SPREAD.y[0]),
+                ) + clamp(
+                    (KATANA_BASE_POSITION.y - katana.position.y) / KATANA_SPREAD.y[0],
                     0, 1,
                 )
-                
+                fmt.println(xt, yt)
                 katana.rotation = linalg.matrix3_from_euler_angles_zx(
                     math.lerp(KATANA_ANGLES.x[0], KATANA_ANGLES.x[1], xt),
                     math.lerp(KATANA_ANGLES.y[0], KATANA_ANGLES.y[1], yt),
