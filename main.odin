@@ -61,7 +61,7 @@ KATANA_SPREAD :: [2][2]f32 {
     {-2, 2},
     {-1, 2},
 }
-KATANA_BASE_POSITION :: Vec3{0, -2, -3}
+KATANA_BASE_POSITION :: Vec3{0, -2, -4}
 KATANA_BASE_ROTATION :: matrix[3, 3]f32{
     -0.000, 1.000, 0.000,
     1.000, 0.000, 0.000,
@@ -170,6 +170,7 @@ main :: proc() {
     stopwatch: time.Stopwatch
     pause := true
     dt: f32 = 0.05
+    last_xt: f32 = 0.5
     for !glfw.WindowShouldClose(window) { // Render
         time.stopwatch_reset(&stopwatch)
         time.stopwatch_start(&stopwatch)
@@ -241,13 +242,18 @@ main :: proc() {
                     KATANA_BASE_POSITION.y + KATANA_SPREAD.y[0],
                     KATANA_BASE_POSITION.y + KATANA_SPREAD.y[1],
                 )
-                xt := 0.5 * clamp(
-                    (katana.position.x - KATANA_BASE_POSITION.x) / abs(KATANA_SPREAD.x[1]),
-                    0, 1,
-                ) + 0.5 * clamp(
-                    1 - (KATANA_BASE_POSITION.x - katana.position.x) / abs(KATANA_SPREAD.x[0]),
-                    0, 1,
-                )
+
+                xt: f32 = last_xt
+                fmt.println(linalg.length(diff))
+                if linalg.length(diff) < 100 {
+                    xt = 0.5 * clamp(
+                        (katana.position.x - KATANA_BASE_POSITION.x) / abs(KATANA_SPREAD.x[1]),
+                        0, 1,
+                    ) + 0.5 * clamp(
+                        1 - (KATANA_BASE_POSITION.x - katana.position.x) / abs(KATANA_SPREAD.x[0]),
+                        0, 1,
+                    )
+                }
 
                 yt := 0.5 * clamp(
                     (katana.position.y - KATANA_BASE_POSITION.y) / abs(KATANA_SPREAD.y[1]),
@@ -261,12 +267,14 @@ main :: proc() {
                     math.lerp(KATANA_ANGLES.x[0], KATANA_ANGLES.x[1], xt),
                     math.lerp(KATANA_ANGLES.y[0], KATANA_ANGLES.y[1], yt),
                 ) * KATANA_BASE_ROTATION
+                last_xt = xt
             }
             prev_mouse_pos = Vec2{f32(x), f32(y)}
             camera.transform.position = player.position
             player.rotation = camera.transform.rotation
             camera_update(&camera)
             instance_update(state, &player)
+            // fmt.println(katana.position)
 
             for enemy, i in enemies {
                 if collide(state.physics, katana, enemy^) {
