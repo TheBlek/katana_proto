@@ -81,6 +81,17 @@ GameState :: struct {
     terrain: Instance_Id,
     enemies: [dynamic]Instance_Id,
     pointer: Instance_Id,
+
+    prev_key_state: map[i32]i32,
+    prev_mouse_pos: Vec2,
+    pitch, yaw: f32,
+
+    player_velocity: Vec3,
+    grounded: bool,
+    ground_normal: Vec3,
+ 
+    pause: bool,
+    last_xt: f32,
 }
 
 vec4_from_vec3 :: proc(vec: Vec3, w: f32) -> Vec4 {
@@ -135,6 +146,7 @@ init :: proc() -> GameState  {
         renderer = renderer,
         camera = camera,
         window = window,
+        last_xt = 0.5,
     }
 
     katana_model, ok_file := model_load_from_file("./resources/katana.gltf")
@@ -180,141 +192,141 @@ init :: proc() -> GameState  {
     return state
 }
 
+handle_input :: proc(state: ^GameState, dt: f32) {
+    player := &state.instances[state.player]
+    if state.grounded {
+        shift := glfw.GetKey(state.window, glfw.KEY_LEFT_SHIFT)
+        state.prev_key_state[glfw.KEY_LEFT_SHIFT] = shift
+        multiplier: f32 = 1.0
+        if shift == glfw.PRESS {
+            multiplier = PLAYER_RUN_MULTIPLIER
+        }
+
+        for move in MOVEMENT_BINDS {
+            key_state := glfw.GetKey(state.window, move.key)
+            if key_state == glfw.PRESS { 
+                ground := plane_from_normal_n_point(state.ground_normal, player.position)
+                shifted := player.position + state.camera.transform.rotation * move.vec * multiplier * dt
+                to := plane_project_point(ground, shifted)
+                player.position = to 
+            }
+            state.prev_key_state[move.key] = key_state
+        }
+    }
+
+    x, y := glfw.GetCursorPos(state.window)
+    diff := Vec2{f32(x), f32(y)}  - state.prev_mouse_pos
+    katana := &state.instances[state.katana]
+    if glfw.GetKey(state.window, KATANA_MOVEMENT_BIND) != glfw.PRESS {
+        offset := diff * MOUSE_SENSITIVITY
+
+        state.pitch -= offset.y
+        state.yaw -= offset.x
+        state.pitch = clamp(state.pitch, -math.PI/2 - 0.1, math.PI/2 - 0.1)
+
+        state.camera.transform.rotation = linalg.matrix3_from_yaw_pitch_roll(state.yaw, state.pitch, 0)
+    } else {
+        katana.position.x += diff.x * KATANA_SENSITIVITY
+        katana.position.x = clamp(
+            katana.position.x,
+            KATANA_BASE_POSITION.x + KATANA_SPREAD.x[0],
+            KATANA_BASE_POSITION.x + KATANA_SPREAD.x[1],
+        )
+        katana.position.y -= diff.y * KATANA_SENSITIVITY
+        katana.position.y = clamp(
+            katana.position.y,
+            KATANA_BASE_POSITION.y + KATANA_SPREAD.y[0],
+            KATANA_BASE_POSITION.y + KATANA_SPREAD.y[1],
+        )
+
+        xt: f32 = state.last_xt
+        if linalg.length(diff) < 100 {
+            xt = 0.5 * clamp(
+                (katana.position.x - KATANA_BASE_POSITION.x) / abs(KATANA_SPREAD.x[1]),
+                0, 1,
+            ) + 0.5 * clamp(
+                1 - (KATANA_BASE_POSITION.x - katana.position.x) / abs(KATANA_SPREAD.x[0]),
+                0, 1,
+            )
+        }
+
+        yt := 0.5 * clamp(
+            (katana.position.y - KATANA_BASE_POSITION.y) / abs(KATANA_SPREAD.y[1]),
+            0, 1,
+        ) + 0.5 * clamp(
+            1 - (KATANA_BASE_POSITION.y - katana.position.y) / abs(KATANA_SPREAD.y[0]),
+            0, 1,
+        )
+        
+        katana.rotation = linalg.matrix3_from_euler_angles_zx(
+            math.lerp(KATANA_ANGLES.x[0], KATANA_ANGLES.x[1], xt),
+            math.lerp(KATANA_ANGLES.y[0], KATANA_ANGLES.y[1], yt),
+        ) * KATANA_BASE_ROTATION
+        state.last_xt = xt
+    }
+    state.prev_mouse_pos = Vec2{f32(x), f32(y)}
+    state.camera.transform.position = player.position
+    player.rotation = state.camera.transform.rotation
+    camera_update(&state.camera)
+    instance_update(state^, state.player)
+}
+
+update :: proc(state: ^GameState, dt: f32) {
+    player := &state.instances[state.player]
+    katana := &state.instances[state.katana]
+    terrain := state.instances[state.terrain]
+    downwards := Ray { player.position, VEC3_Y_NEG }
+    state.grounded = false
+    if data, ok := collision_full(state.physics, downwards, terrain).(CollisionData); ok {
+        if linalg.length(player.position - data.point) < PLAYER_HEIGHT {
+            state.grounded = true
+            state.ground_normal = data.normal
+            state.player_velocity.y = 0
+        }
+    }
+
+    if !state.grounded {
+        state.player_velocity += GRAVITY * dt
+    }
+
+    player.position += state.player_velocity * dt
+
+    sight := Ray { state.camera.transform.position, state.camera.transform.rotation * VEC3_Z_NEG }
+    if point, ok := collision(state.physics, sight, terrain).(Vec3); ok {
+        pointer := &state.instances[state.pointer]
+        pointer.position = point
+        instance_update(state^, state.pointer)
+    }
+
+    for enemy, i in state.enemies {
+        if collide(state.physics, katana^, state.instances[enemy]) {
+            unordered_remove(&state.enemies, i)
+            fmt.println("Removed!")
+        }
+    }
+}
+
 main :: proc() {
     state := init()
-    prev_key_state: map[i32]i32
-    prev_mouse_pos: Vec2
-    pitch, yaw: f32
 
-    player_velocity := Vec3(0)
-    grounded := false
-    ground_normal: Vec3
- 
-    stopwatch: time.Stopwatch
-    pause := true
     dt: f32 = 0.05
-    last_xt: f32 = 0.5
+    stopwatch: time.Stopwatch
     for !glfw.WindowShouldClose(state.window) {
         time.stopwatch_reset(&stopwatch)
         time.stopwatch_start(&stopwatch)
         // Game logic
 
-        if !pause {
-            player := &state.instances[state.player]
-            terrain := state.instances[state.terrain]
-            downwards := Ray { player.position, VEC3_Y_NEG }
-            grounded = false
-            if data, ok := collision_full(state.physics, downwards, terrain).(CollisionData); ok {
-                if linalg.length(player.position - data.point) < PLAYER_HEIGHT {
-                    grounded = true
-                    ground_normal = data.normal
-                    player_velocity.y = 0
-                }
-            }
-
-            if !grounded {
-                player_velocity += GRAVITY * dt
-            }
-
-            player.position += player_velocity * dt
-
-            sight := Ray { state.camera.transform.position, state.camera.transform.rotation * VEC3_Z_NEG }
-            if point, ok := collision(state.physics, sight, terrain).(Vec3); ok {
-                pointer := &state.instances[state.pointer]
-                pointer.position = point
-                instance_update(state, state.pointer)
-            }
-
-            if grounded {
-                shift := glfw.GetKey(state.window, glfw.KEY_LEFT_SHIFT)
-                prev_key_state[glfw.KEY_LEFT_SHIFT] = shift
-                multiplier: f32 = 1.0
-                if shift == glfw.PRESS {
-                    multiplier = PLAYER_RUN_MULTIPLIER
-                }
-
-                for move in MOVEMENT_BINDS {
-                    key_state := glfw.GetKey(state.window, move.key)
-                    if key_state == glfw.PRESS { 
-                        ground := plane_from_normal_n_point(ground_normal, player.position)
-                        shifted := player.position + state.camera.transform.rotation * move.vec * multiplier * dt
-                        to := plane_project_point(ground, shifted)
-                        player.position = to 
-                    }
-                    prev_key_state[move.key] = key_state
-                }
-            }
-
-            x, y := glfw.GetCursorPos(state.window)
-            diff := Vec2{f32(x), f32(y)}  - prev_mouse_pos
-            katana := &state.instances[state.katana]
-            if glfw.GetKey(state.window, KATANA_MOVEMENT_BIND) != glfw.PRESS {
-                offset := diff * MOUSE_SENSITIVITY
-
-                pitch -= offset.y
-                yaw -= offset.x
-                pitch = clamp(pitch, -math.PI/2 - 0.1, math.PI/2 - 0.1)
-
-                state.camera.transform.rotation = linalg.matrix3_from_yaw_pitch_roll(yaw, pitch, 0)
-            } else {
-                katana.position.x += diff.x * KATANA_SENSITIVITY
-                katana.position.x = clamp(
-                    katana.position.x,
-                    KATANA_BASE_POSITION.x + KATANA_SPREAD.x[0],
-                    KATANA_BASE_POSITION.x + KATANA_SPREAD.x[1],
-                )
-                katana.position.y -= diff.y * KATANA_SENSITIVITY
-                katana.position.y = clamp(
-                    katana.position.y,
-                    KATANA_BASE_POSITION.y + KATANA_SPREAD.y[0],
-                    KATANA_BASE_POSITION.y + KATANA_SPREAD.y[1],
-                )
-
-                xt: f32 = last_xt
-                if linalg.length(diff) < 100 {
-                    xt = 0.5 * clamp(
-                        (katana.position.x - KATANA_BASE_POSITION.x) / abs(KATANA_SPREAD.x[1]),
-                        0, 1,
-                    ) + 0.5 * clamp(
-                        1 - (KATANA_BASE_POSITION.x - katana.position.x) / abs(KATANA_SPREAD.x[0]),
-                        0, 1,
-                    )
-                }
-
-                yt := 0.5 * clamp(
-                    (katana.position.y - KATANA_BASE_POSITION.y) / abs(KATANA_SPREAD.y[1]),
-                    0, 1,
-                ) + 0.5 * clamp(
-                    1 - (KATANA_BASE_POSITION.y - katana.position.y) / abs(KATANA_SPREAD.y[0]),
-                    0, 1,
-                )
-                
-                katana.rotation = linalg.matrix3_from_euler_angles_zx(
-                    math.lerp(KATANA_ANGLES.x[0], KATANA_ANGLES.x[1], xt),
-                    math.lerp(KATANA_ANGLES.y[0], KATANA_ANGLES.y[1], yt),
-                ) * KATANA_BASE_ROTATION
-                last_xt = xt
-            }
-            prev_mouse_pos = Vec2{f32(x), f32(y)}
-            state.camera.transform.position = player.position
-            player.rotation = state.camera.transform.rotation
-            camera_update(&state.camera)
-            instance_update(state, state.player)
-
-            for enemy, i in state.enemies {
-                if collide(state.physics, katana^, state.instances[enemy]) {
-                    unordered_remove(&state.enemies, i)
-                    fmt.println("Removed!")
-                }
-            }
+        if !state.pause {
+            update(&state, dt)
+            handle_input(&state, dt)
         }
 
         e_state := glfw.GetKey(state.window, glfw.KEY_E)
-        if e_state == glfw.PRESS && prev_key_state[glfw.KEY_E] == glfw.RELEASE {
-            pause = !pause
+        if e_state == glfw.PRESS && state.prev_key_state[glfw.KEY_E] == glfw.RELEASE {
+            state.pause = !state.pause
             fmt.println("Pressed e")
         }
-        prev_key_state[glfw.KEY_E] = e_state
+        state.prev_key_state[glfw.KEY_E] = e_state
 
         render(&state)
         
