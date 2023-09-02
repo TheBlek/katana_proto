@@ -6,7 +6,7 @@ import "core:fmt"
 import "core:slice"
 
 PhysicsData :: struct {
-    models: ^[dynamic]Model,
+    models: [dynamic]Model,
     aabbs: [dynamic]AABB,
 }
 
@@ -230,7 +230,7 @@ exists_triangle_no_cache :: proc(
 
 collide_instance_aabb :: proc(cache: PhysicsData, a: Instance, b: AABB) -> bool {
     instrument_proc(.PhysicsCollisionTest)
-    if !collide_aabb_aabb(b, cache.aabbs[a.instance_id]) {
+    if !collide_aabb_aabb(b, cache.aabbs[a.id]) {
         return false
     }
     return exists_triangle(cache, a, collide_triangle_aabb, b)
@@ -309,7 +309,7 @@ collide_triangle_triangle :: proc(a, b: Triangle) -> bool {
 
 collide_instance_triangle :: proc(cache: PhysicsData, a: Instance, b: Triangle) -> bool {
     instrument_proc(.PhysicsCollisionTest)
-    if !collide_triangle_aabb(b, cache.aabbs[a.instance_id]) {
+    if !collide_triangle_aabb(b, cache.aabbs[a.id]) {
         return false
     }
 
@@ -322,7 +322,7 @@ collide_triangle_instance :: proc(cache: PhysicsData, a: Triangle, b: Instance) 
 
 collide_instance_instance :: proc(cache: PhysicsData, a, b: Instance) -> bool {
     instrument_proc(.PhysicsCollisionTest)
-    if !collide_aabb_aabb(cache.aabbs[a.instance_id], cache.aabbs[b.instance_id]) {
+    if !collide_aabb_aabb(cache.aabbs[a.id], cache.aabbs[b.id]) {
         return false
     }
 
@@ -335,7 +335,7 @@ collide_instance_instance_partitioned :: proc(
     b_grid: PartitionGrid,
 ) -> bool {
     instrument_proc(.PhysicsCollisionTest)
-    if !collide_aabb_aabb(cache.aabbs[a.instance_id], cache.aabbs[b.instance_id]) {
+    if !collide_aabb_aabb(cache.aabbs[a.id], cache.aabbs[b.id]) {
         return false
     }
 
@@ -512,7 +512,7 @@ collision_ray_triangle :: proc(using ray: Ray, using triangle: Triangle) -> Mayb
 }
 
 collision_ray_instance :: proc(data: PhysicsData, a: Ray, b: Instance) -> Maybe(Vec3) {
-    if !collide(a, data.aabbs[b.instance_id]) {
+    if !collide(a, data.aabbs[b.id]) {
        return nil 
     }
     model := data.models[b.model_id]
@@ -532,12 +532,7 @@ collision_ray_instance :: proc(data: PhysicsData, a: Ray, b: Instance) -> Maybe(
             triangle.points[1] - triangle.points[0],
             triangle.points[2] - triangle.points[0],
         )
-        if linalg.dot(normal, triangle.normal) < 0 {
-            // TODO(theblek): move this promise to model level
-            // fmt.println("Expensive operation!")
-            slice.swap(triangle.points[:], 1, 2)
-            triangle.normal *= -1
-        }
+        assert(linalg.dot(normal, triangle.normal) > 0)
         if point, ok := collision(a, triangle).(Vec3); ok {
             return point
         }
@@ -646,7 +641,7 @@ collision_ray_triangle_full :: proc(using ray: Ray, using t: Triangle) -> Maybe(
 
 collision_ray_instance_full :: proc(data: PhysicsData, a: Ray, b: Instance) -> Maybe(CollisionData) {
     instrument_proc(.PhysicsCollision)
-    if !collide(a, data.aabbs[b.instance_id]) {
+    if !collide(a, data.aabbs[b.id]) {
        return nil 
     }
     model := &data.models[b.model_id]

@@ -25,15 +25,17 @@ Model :: struct {
     texture_data: Maybe(TextureData),    
 }
 
+Instance_Id :: distinct int
+
 Instance :: struct {
+    id: Instance_Id,
     model_id: int,
-    instance_id: int,
     using transform: Transform,
     scale: Vec3,
     model_matrix: Mat4,
     normal_matrix: Mat3,
     color: Vec3,
-    children: [dynamic]^Instance,
+    children: [dynamic]Instance_Id,
 }
 
 UNIT_CUBE :: Model {
@@ -133,47 +135,53 @@ scale_matrix :: proc(scale: Vec3) -> (result: Mat4) {
 
 model_register :: proc(state: ^GameState, m: Model) -> (id: int) {
     instrument_proc(.ModelMisc)
-    id = len(state.models)
-    append(&state.models, m)
+    m := m
 
-    model := &state.models[id]
-    triangle_count := len(model.indices) / 3
+    // Ensure that ab x ac is a correct normal
+    triangle_count := len(m.indices) / 3
     for i in 0..<triangle_count {
         triangle := Triangle {
             points = {
-                model.vertices[model.indices[3 * i]],
-                model.vertices[model.indices[3 * i + 1]],
-                model.vertices[model.indices[3 * i + 2]],
+                m.vertices[m.indices[3 * i]],
+                m.vertices[m.indices[3 * i + 1]],
+                m.vertices[m.indices[3 * i + 2]],
             },
         }
-        normal := model.normals[model.indices[3 * i]]
+        normal := m.normals[m.indices[3 * i]]
         triangle.normal = linalg.cross(
             triangle.points[1] - triangle.points[0],
             triangle.points[2] - triangle.points[0],
         )
         if linalg.dot(normal, triangle.normal) < 0 {
-            slice.swap(model.indices, 3*i + 1, 3*i + 2)
+            slice.swap(m.indices, 3*i + 1, 3*i + 2)
             triangle.normal *= -1
         }
     }
+
+    id = len(state.renderer.models)
+    append(&state.renderer.models, m)
+    append(&state.physics.models, m)
     return id
 }
 
-instance_update :: proc(state: GameState, using instance: ^Instance, parent_mat := MAT4_IDENTITY) {
+instance_update :: proc(state: GameState, id: Instance_Id, parent_mat := MAT4_IDENTITY) {
     instrument_proc(.ModelInstance)
+    instance := &state.instances[id]
+    using instance
     pm := parent_mat
     model_matrix = pm * disposition_matrix(transform) * scale_matrix(scale)
     normal_matrix = linalg.matrix3_from_matrix4(inverse_transpose(model_matrix))
-    state.physics.aabbs[instance_id] = aabb_from_instance(state.physics, instance^)
-    instance_update_data(state, instance^)
+    state.physics.aabbs[id] = aabb_from_instance(state.physics, instance^)
+    instance_update_data(state, id)
     for child in children {
         instance_update(state, child, model_matrix)
     }
 }
 
-instance_update_data :: proc(state: GameState, instance: Instance) {
+instance_update_data :: proc(state: GameState, id: Instance_Id) {
     instrument_proc(.ModelInstance)
-    model := &state.models[instance.model_id]
+    instance := state.instances[id]
+    model := &state.renderer.models[instance.model_id]
 
     assert(
         len(model.vertices) == len(model.normals),
@@ -187,7 +195,6 @@ instance_update_data :: proc(state: GameState, instance: Instance) {
         )
     }
 
-    id := instance.instance_id
     data := state.renderer.instance_data[id][:]
     for i in 0..<len(model.vertices) {
         copy(data, model.vertices[i][:])
@@ -338,7 +345,7 @@ instance_create_pos_rot :: proc(
     rotation := MAT3_IDENTITY,
     scale := VEC3_ONE,
     color := VEC3_ONE,
-) -> Instance {
+) -> Instance_Id {
     return instance_create_transform(state, model, Transform{position, rotation}, scale, color)
 }
 
@@ -348,21 +355,23 @@ instance_create_transform :: proc(
     transform: Transform,
     scale := VEC3_ONE,
     color := VEC3_ONE,
-) -> Instance {
-    id := state.instance_count
+) -> Instance_Id {
+    id := len(state.instances)
     state.instance_count += 1
     append(&state.physics.aabbs, AABB{})
-    model := state.models[model_id]
+    model := state.renderer.models[model_id]
     data_size := 2 * len(Vec3) * len(model.vertices)
     if _, ok := model.texture_data.(TextureData); ok {
         data_size += len(Vec2) * len(model.vertices)
     }
     append(&state.renderer.instance_data, make([]f32, data_size))
-    return Instance {
+    res := Instance {
         model_id = model_id,
-        instance_id = id,
         transform = transform,
+        id = Instance_Id(id),
         scale = scale,
         color = color,
     }
+    append(&state.instances, res)
+    return Instance_Id(id)
 }

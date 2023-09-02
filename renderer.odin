@@ -79,17 +79,10 @@ Renderer :: struct {
     modes: []RenderModeData,
     dir_light: DirectionalLight,
     point_lights: [dynamic]PointLight,
-    models: ^[dynamic]Model,
+    models: [dynamic]Model,
     instance_data: [dynamic][]f32,
 }
 
-renderer_destroy :: proc(window: glfw.WindowHandle, _: Renderer) {
-    glfw.Terminate()
-    glfw.DestroyWindow(window)
-}
-
-
-@(deferred_out=renderer_destroy)
 renderer_init :: proc() -> (glfw.WindowHandle, Renderer) {
     assert(glfw.Init() != 0, "Failed to initialize glfw")
 
@@ -160,7 +153,7 @@ renderer_init :: proc() -> (glfw.WindowHandle, Renderer) {
 }
 
 renderer_draw_instance :: proc(renderer: ^Renderer, camera: Camera, instance: ^Instance) {
-    data := renderer.instance_data[instance.instance_id]
+    data := renderer.instance_data[instance.id]
 
     model := &renderer.models[instance.model_id]
     shader: u32
@@ -173,23 +166,24 @@ renderer_draw_instance :: proc(renderer: ^Renderer, camera: Camera, instance: ^I
             vbo = renderer.modes[RenderMode.Textured].vbo
             gl.UseProgram(shader)
             for &tex, i in tex_data.textures {
-                if tex_id, ok := tex.id.(u32); !ok {
+                tex_id, ok := tex.id.(u32);
+                if !ok {
                     img, err := png.load_from_file(tex.filename)
-                    assert(err == nil)
+                    assert(err == nil, "Could not load texture file")
                     assert(image.alpha_drop_if_present(img))
 
-                    tex.id = 0
-                    gl.GenTextures(1, &tex.id.(u32))
-                    gl.BindTexture(gl.TEXTURE_2D, tex.id.(u32))
+                    gl.GenTextures(1, &tex_id)
+                    tex.id = tex_id
+                    gl.BindTexture(gl.TEXTURE_2D, tex_id)
                     gl.TexImage2D(
                         gl.TEXTURE_2D, 0, gl.RGB, 
                         i32(img.width), i32(img.height), 0,
                         gl.RGB, gl.UNSIGNED_BYTE, raw_data(bytes.buffer_to_bytes(&img.pixels)),
                     )
                     gl.GenerateMipmap(gl.TEXTURE_2D);
-                } 
+                }
                 gl.ActiveTexture(gl.TEXTURE0 + u32(i))
-                gl.BindTexture(gl.TEXTURE_2D, tex.id.(u32)) 
+                gl.BindTexture(gl.TEXTURE_2D, tex_id) 
             }
         case:
             shader = renderer.modes[RenderMode.Plain].shader

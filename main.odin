@@ -69,10 +69,18 @@ KATANA_BASE_ROTATION :: matrix[3, 3]f32{
 }
 
 GameState :: struct {
-    models: [dynamic]Model,
     instance_count: int,
     renderer: Renderer,
-    physics: PhysicsData, 
+    physics: PhysicsData,
+    window: glfw.WindowHandle,
+    
+    instances: [dynamic]Instance,
+    player: Instance_Id,
+    katana: Instance_Id,
+    camera: Camera,
+    terrain: Instance_Id,
+    enemies: [dynamic]Instance_Id,
+    pointer: Instance_Id,
 }
 
 vec4_from_vec3 :: proc(vec: Vec3, w: f32) -> Vec4 {
@@ -87,7 +95,24 @@ Transform :: struct {
 WIDTH :: 1280
 HEIGHT :: 720
 
-main :: proc() {
+render :: proc(state: ^GameState) {
+    gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+    renderer_draw_instance(&state.renderer, state.camera, &state.instances[state.katana])
+    renderer_draw_instance(&state.renderer, state.camera, &state.instances[state.terrain])
+    renderer_draw_instance(&state.renderer, state.camera, &state.instances[state.pointer])
+    for &enemy in state.enemies {
+        renderer_draw_instance(&state.renderer, state.camera, &state.instances[enemy])
+    }
+    glfw.SwapBuffers(state.window)
+}
+
+destroy :: proc(state: GameState) {
+    glfw.Terminate()
+    glfw.DestroyWindow(state.window)
+}
+
+@(deferred_out=destroy)
+init :: proc() -> GameState  {
     window, renderer := renderer_init()
     glfw.SetInputMode(window, glfw.CURSOR, glfw.CURSOR_DISABLED) 
     gl.Enable(gl.DEPTH_TEST)
@@ -108,57 +133,55 @@ main :: proc() {
     )
     state := GameState {
         renderer = renderer,
+        camera = camera,
+        window = window,
     }
-    state.renderer.models = &state.models
-    state.physics.models = &state.models
 
     katana_model, ok_file := model_load_from_file("./resources/katana.gltf")
     assert(ok_file)
     switch &t in katana_model.texture_data {
         case TextureData:
-            t.textures = {
-                { filename="./resources/katana_diffuse.png" },
-                { filename="./resources/katana_specular.png" },
-            }
+            t.textures = make([]Texture, 2)
+            t.textures[0] = { filename="./resources/katana_diffuse.png" }
+            t.textures[1] = { filename="./resources/katana_specular.png" }
     }
     katana_model_id := model_register(&state, katana_model)
 
-    katana := instance_create(
+    state.katana = instance_create(
         &state,
         katana_model_id,
         scale = 0.1,
         position = KATANA_BASE_POSITION,
         rotation = KATANA_BASE_ROTATION,
     )
-    instance_update(state, &katana)
+    instance_update(state, state.katana)
 
     terrain_model_id := model_register(&state, get_terrain(100, 100, 6, 200, 1))
-    terrain := instance_create(&state, terrain_model_id, color = Vec3{0.659, 0.392, 0.196})
-    instance_update(state, &terrain)
+    state.terrain = instance_create(&state, terrain_model_id, color = Vec3{0.659, 0.392, 0.196})
+    instance_update(state, state.terrain)
     // terrain_partition := partition_grid_from_instance(state.physics, 1, 101, terrain)
-
-    cube_id := model_register(&state, UNIT_CUBE)
-    obj1 := instance_create(&state, cube_id, position = {2.2, 15, 0}, color = COLOR_RED)
-    instance_update(state, &obj1)
-
-    capsule_id := model_register(&state, UNIT_CAPSULE)
+    
+    capsule_id := model_register(&state, get_capsule(2))
     obj2 := instance_create(&state, capsule_id, position = {2, 8, -0.8}, color = COLOR_RED)
-    instance_update(state, &obj2)
+    instance_update(state, obj2)
 
-    sphere_id := model_register(&state, UNIT_SPHERE)
-    pointer := instance_create(&state, sphere_id, scale = 0.05, color = COLOR_BLUE)
-    instance_update(state, &pointer)
+    sphere_id := model_register(&state, get_sphere(2))
+    state.pointer = instance_create(&state, sphere_id, scale = 0.05, color = COLOR_BLUE)
+    instance_update(state, state.pointer)
 
     state.renderer.dir_light = DirectionalLight { strength = 0.1, color = 1, direction = Vec3{1, 0, 0} }
     append(&state.renderer.point_lights, PointLight { strength = 1, color = Vec3{1, 1, 0}, constant = 1, linear = 0.09, quadratic = 0.032 })
     // light := &state.renderer.point_lights[0]
 
-    player := instance_create(&state, capsule_id, position = {0, 10, 25})
-    append(&player.children, &katana)
+    state.player = instance_create(&state, capsule_id, position = {0, 10, 25})
+    append(&state.instances[state.player].children, state.katana)
 
-    enemies: [dynamic]^Instance
-    append(&enemies, &obj2)
+    append(&state.enemies, obj2)
+    return state
+}
 
+main :: proc() {
+    state := init()
     prev_key_state: map[i32]i32
     prev_mouse_pos: Vec2
     pitch, yaw: f32
@@ -171,13 +194,15 @@ main :: proc() {
     pause := true
     dt: f32 = 0.05
     last_xt: f32 = 0.5
-    for !glfw.WindowShouldClose(window) { // Render
+    for !glfw.WindowShouldClose(state.window) {
         time.stopwatch_reset(&stopwatch)
         time.stopwatch_start(&stopwatch)
         // Game logic
-        downwards := Ray { player.position, VEC3_Y_NEG }
 
         if !pause {
+            player := &state.instances[state.player]
+            terrain := state.instances[state.terrain]
+            downwards := Ray { player.position, VEC3_Y_NEG }
             grounded = false
             if data, ok := collision_full(state.physics, downwards, terrain).(CollisionData); ok {
                 if linalg.length(player.position - data.point) < PLAYER_HEIGHT {
@@ -193,14 +218,15 @@ main :: proc() {
 
             player.position += player_velocity * dt
 
-            sight := Ray { camera.transform.position, camera.transform.rotation * VEC3_Z_NEG }
-            if point, ok := collision(state.physics, sight, obj2).(Vec3); ok {
+            sight := Ray { state.camera.transform.position, state.camera.transform.rotation * VEC3_Z_NEG }
+            if point, ok := collision(state.physics, sight, terrain).(Vec3); ok {
+                pointer := &state.instances[state.pointer]
                 pointer.position = point
-                instance_update(state, &pointer)
+                instance_update(state, state.pointer)
             }
 
             if grounded {
-                shift := glfw.GetKey(window, glfw.KEY_LEFT_SHIFT)
+                shift := glfw.GetKey(state.window, glfw.KEY_LEFT_SHIFT)
                 prev_key_state[glfw.KEY_LEFT_SHIFT] = shift
                 multiplier: f32 = 1.0
                 if shift == glfw.PRESS {
@@ -208,10 +234,10 @@ main :: proc() {
                 }
 
                 for move in MOVEMENT_BINDS {
-                    key_state := glfw.GetKey(window, move.key)
+                    key_state := glfw.GetKey(state.window, move.key)
                     if key_state == glfw.PRESS { 
                         ground := plane_from_normal_n_point(ground_normal, player.position)
-                        shifted := player.position + camera.transform.rotation * move.vec * multiplier * dt
+                        shifted := player.position + state.camera.transform.rotation * move.vec * multiplier * dt
                         to := plane_project_point(ground, shifted)
                         player.position = to 
                     }
@@ -219,16 +245,17 @@ main :: proc() {
                 }
             }
 
-            x, y := glfw.GetCursorPos(window)
+            x, y := glfw.GetCursorPos(state.window)
             diff := Vec2{f32(x), f32(y)}  - prev_mouse_pos
-            if glfw.GetKey(window, KATANA_MOVEMENT_BIND) != glfw.PRESS {
+            katana := &state.instances[state.katana]
+            if glfw.GetKey(state.window, KATANA_MOVEMENT_BIND) != glfw.PRESS {
                 offset := diff * MOUSE_SENSITIVITY
 
                 pitch -= offset.y
                 yaw -= offset.x
                 pitch = clamp(pitch, -math.PI/2 - 0.1, math.PI/2 - 0.1)
 
-                camera.transform.rotation = linalg.matrix3_from_yaw_pitch_roll(yaw, pitch, 0)
+                state.camera.transform.rotation = linalg.matrix3_from_yaw_pitch_roll(yaw, pitch, 0)
             } else {
                 katana.position.x += diff.x * KATANA_SENSITIVITY
                 katana.position.x = clamp(
@@ -244,7 +271,6 @@ main :: proc() {
                 )
 
                 xt: f32 = last_xt
-                fmt.println(linalg.length(diff))
                 if linalg.length(diff) < 100 {
                     xt = 0.5 * clamp(
                         (katana.position.x - KATANA_BASE_POSITION.x) / abs(KATANA_SPREAD.x[1]),
@@ -270,37 +296,27 @@ main :: proc() {
                 last_xt = xt
             }
             prev_mouse_pos = Vec2{f32(x), f32(y)}
-            camera.transform.position = player.position
-            player.rotation = camera.transform.rotation
-            camera_update(&camera)
-            instance_update(state, &player)
-            // fmt.println(katana.position)
+            state.camera.transform.position = player.position
+            player.rotation = state.camera.transform.rotation
+            camera_update(&state.camera)
+            instance_update(state, state.player)
 
-            for enemy, i in enemies {
-                if collide(state.physics, katana, enemy^) {
-                    unordered_remove(&enemies, i)
+            for enemy, i in state.enemies {
+                if collide(state.physics, katana^, state.instances[enemy]) {
+                    unordered_remove(&state.enemies, i)
                     fmt.println("Removed!")
                 }
             }
         }
 
-        e_state := glfw.GetKey(window, glfw.KEY_E)
+        e_state := glfw.GetKey(state.window, glfw.KEY_E)
         if e_state == glfw.PRESS && prev_key_state[glfw.KEY_E] == glfw.RELEASE {
             pause = !pause
             fmt.println("Pressed e")
         }
         prev_key_state[glfw.KEY_E] = e_state
 
-        // Rendering
-        gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-        renderer_draw_instance(&state.renderer, camera, &katana)
-        renderer_draw_instance(&state.renderer, camera, &terrain)
-        renderer_draw_instance(&state.renderer, camera, &obj1)
-        renderer_draw_instance(&state.renderer, camera, &pointer)
-        for enemy in enemies {
-            renderer_draw_instance(&state.renderer, camera, enemy)
-        }
-        glfw.SwapBuffers(window)
+        render(&state)
         
         glfw.PollEvents()
         time.stopwatch_stop(&stopwatch)
