@@ -4,6 +4,7 @@ import "core:fmt"
 import "core:math/linalg"
 import "core:math"
 import "core:time"
+import "core:slice"
 import "vendor:glfw"
 import gl "vendor:OpenGL"
 Vec2 :: linalg.Vector2f32
@@ -68,10 +69,19 @@ KATANA_BASE_ROTATION :: matrix[3, 3]f32{
     0.000, 0.000, -1.000,
 }
 
+InputState :: struct {
+    keys: []i32, // It can by dynamic, but I don't see a usecase rn
+    prev_key_state: map[i32]i32,
+    key_state: map[i32]i32,
+    prev_mouse_pos: Vec2,
+    mouse_pos: Vec2,
+}
+
 GameState :: struct {
     instance_count: int,
     renderer: Renderer,
     physics: PhysicsData,
+    input: InputState,
     window: glfw.WindowHandle,
     
     instances: [dynamic]Instance,
@@ -82,16 +92,14 @@ GameState :: struct {
     enemies: [dynamic]Instance_Id,
     pointer: Instance_Id,
 
-    prev_key_state: map[i32]i32,
-    prev_mouse_pos: Vec2,
+    pause: bool,
+
     pitch, yaw: f32,
+    last_xt: f32,
 
     player_velocity: Vec3,
     grounded: bool,
     ground_normal: Vec3,
- 
-    pause: bool,
-    last_xt: f32,
 }
 
 vec4_from_vec3 :: proc(vec: Vec3, w: f32) -> Vec4 {
@@ -142,11 +150,25 @@ init :: proc() -> GameState  {
         camera.near,
         camera.far,
     )
+
+    inputs := []i32 {
+        MOVEMENT_BINDS[0].key,
+        MOVEMENT_BINDS[1].key,
+        MOVEMENT_BINDS[2].key,
+        MOVEMENT_BINDS[3].key,
+        KATANA_MOVEMENT_BIND,
+        glfw.KEY_LEFT_SHIFT,
+        glfw.KEY_E,
+    }
+
     state := GameState {
         renderer = renderer,
         camera = camera,
         window = window,
         last_xt = 0.5,
+        input = {
+            keys = slice.clone(inputs)
+        }
     }
 
     katana_model, ok_file := model_load_from_file("./resources/katana.gltf")
@@ -192,32 +214,53 @@ init :: proc() -> GameState  {
     return state
 }
 
-handle_input :: proc(state: ^GameState, dt: f32) {
+input_gather :: proc(state: ^InputState, window: glfw.WindowHandle) {
+    for key in state.keys {
+        state.prev_key_state[key] = state.key_state[key]
+        state.key_state[key] = glfw.GetKey(window, key)
+    }
+
+    state.prev_mouse_pos = state.mouse_pos
+    x, y := glfw.GetCursorPos(window)
+    state.mouse_pos = Vec2{f32(x), f32(y)}
+}
+
+input_pressed :: proc(state: InputState, key: i32) -> bool {
+    assert(key in state.key_state)
+    return state.key_state[key] == glfw.PRESS
+}
+
+input_clicked :: proc(state: InputState, key: i32) -> bool {
+    assert(key in state.key_state)
+    assert(key in state.prev_key_state)
+    return state.key_state[key] == glfw.PRESS && state.prev_key_state[key] == glfw.RELEASE
+}
+
+input_mouse_diff :: proc(state: InputState) -> Vec2 {
+    return state.mouse_pos - state.prev_mouse_pos
+}
+
+move_player :: proc(state: ^GameState, dt: f32) {
     player := &state.instances[state.player]
     if state.grounded {
-        shift := glfw.GetKey(state.window, glfw.KEY_LEFT_SHIFT)
-        state.prev_key_state[glfw.KEY_LEFT_SHIFT] = shift
         multiplier: f32 = 1.0
-        if shift == glfw.PRESS {
+        if input_pressed(state.input, glfw.KEY_LEFT_SHIFT) {
             multiplier = PLAYER_RUN_MULTIPLIER
         }
 
         for move in MOVEMENT_BINDS {
-            key_state := glfw.GetKey(state.window, move.key)
-            if key_state == glfw.PRESS { 
+            if input_pressed(state.input, move.key) { 
                 ground := plane_from_normal_n_point(state.ground_normal, player.position)
                 shifted := player.position + state.camera.transform.rotation * move.vec * multiplier * dt
                 to := plane_project_point(ground, shifted)
                 player.position = to 
             }
-            state.prev_key_state[move.key] = key_state
         }
     }
 
-    x, y := glfw.GetCursorPos(state.window)
-    diff := Vec2{f32(x), f32(y)}  - state.prev_mouse_pos
+    diff := input_mouse_diff(state.input) 
     katana := &state.instances[state.katana]
-    if glfw.GetKey(state.window, KATANA_MOVEMENT_BIND) != glfw.PRESS {
+    if !input_pressed(state.input, KATANA_MOVEMENT_BIND) {
         offset := diff * MOUSE_SENSITIVITY
 
         state.pitch -= offset.y
@@ -264,7 +307,6 @@ handle_input :: proc(state: ^GameState, dt: f32) {
         ) * KATANA_BASE_ROTATION
         state.last_xt = xt
     }
-    state.prev_mouse_pos = Vec2{f32(x), f32(y)}
     state.camera.transform.position = player.position
     player.rotation = state.camera.transform.rotation
     camera_update(&state.camera)
@@ -316,17 +358,16 @@ main :: proc() {
         time.stopwatch_start(&stopwatch)
         // Game logic
 
+        input_gather(&state.input, state.window)
         if !state.pause {
             update(&state, dt)
-            handle_input(&state, dt)
+            move_player(&state, dt)
         }
 
-        e_state := glfw.GetKey(state.window, glfw.KEY_E)
-        if e_state == glfw.PRESS && state.prev_key_state[glfw.KEY_E] == glfw.RELEASE {
+        if input_clicked(state.input, glfw.KEY_E) {
             state.pause = !state.pause
             fmt.println("Pressed e")
         }
-        state.prev_key_state[glfw.KEY_E] = e_state
 
         render(&state)
         
