@@ -7,67 +7,8 @@ import "core:time"
 import "core:slice"
 import "vendor:glfw"
 import gl "vendor:OpenGL"
-Vec2 :: linalg.Vector2f32
-Vec3 :: linalg.Vector3f32
-Vec4 :: linalg.Vector4f32
-Mat3 :: linalg.Matrix3f32
-Mat4 :: linalg.Matrix4f32
-
-VEC3_ZERO :: Vec3(0)
-VEC3_ONE :: Vec3(1)
-VEC3_X :: Vec3 {1, 0, 0} 
-VEC3_Y :: Vec3 {0, 1, 0}
-VEC3_Z :: Vec3 {0, 0, 1}
-
-VEC3_X_NEG :: Vec3 {-1, 0, 0} 
-VEC3_Y_NEG :: Vec3 {0, -1, 0}
-VEC3_Z_NEG :: Vec3 {0, 0, -1}
-
-MAT3_IDENTITY :: linalg.MATRIX3F32_IDENTITY
-MAT4_IDENTITY :: linalg.MATRIX4F32_IDENTITY
-
-EPS :: linalg.F32_EPSILON
-
-COLOR_RED :: VEC3_X
-COLOR_GREEN :: VEC3_Y
-COLOR_BLUE :: VEC3_Z
 
 INSTRUMENT :: false
-
-GRAVITY :: Vec3 {0, -9.81, 0}
-PLAYER_HEIGHT :: 1.9
-PLAYER_RUN_MULTIPLIER :: 1.5
-
-MovementKeyBind :: struct {
-    key: i32,
-    vec: Vec3,
-}
-
-MOVEMENT_BINDS :: []MovementKeyBind {
-    { glfw.KEY_W, Vec3{0, 0, -10} },
-    { glfw.KEY_S, Vec3{0, 0, 5} },
-    { glfw.KEY_A, Vec3{-3, 0, 0} },
-    { glfw.KEY_D, Vec3{3, 0, 0} },
-}
-
-KATANA_MOVEMENT_BIND :: glfw.KEY_LEFT_ALT
-
-MOUSE_SENSITIVITY :: 0.001
-KATANA_SENSITIVITY :: 0.001
-KATANA_ANGLES :: [2][2]f32 {
-    {-linalg.PI/2, linalg.PI/2},
-    {linalg.PI/2, -linalg.PI/2},
-}
-KATANA_SPREAD :: [2][2]f32 {
-    {-2, 2},
-    {-1, 2},
-}
-KATANA_BASE_POSITION :: Vec3{0, -2, -4}
-KATANA_BASE_ROTATION :: matrix[3, 3]f32{
-    -0.000, 1.000, 0.000,
-    1.000, 0.000, 0.000,
-    0.000, 0.000, -1.000,
-}
 
 InputState :: struct {
     keys: []i32, // It can by dynamic, but I don't see a usecase rn
@@ -101,18 +42,6 @@ GameState :: struct {
     grounded: bool,
     ground_normal: Vec3,
 }
-
-vec4_from_vec3 :: proc(vec: Vec3, w: f32) -> Vec4 {
-    return {vec.x, vec.y, vec.z, w}
-}
-
-Transform :: struct {
-    position: Vec3,
-    rotation: Mat3,
-}
-
-WIDTH :: 1280
-HEIGHT :: 720
 
 render :: proc(state: ^GameState) {
     gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
@@ -214,32 +143,6 @@ init :: proc() -> GameState  {
     return state
 }
 
-input_gather :: proc(state: ^InputState, window: glfw.WindowHandle) {
-    for key in state.keys {
-        state.prev_key_state[key] = state.key_state[key]
-        state.key_state[key] = glfw.GetKey(window, key)
-    }
-
-    state.prev_mouse_pos = state.mouse_pos
-    x, y := glfw.GetCursorPos(window)
-    state.mouse_pos = Vec2{f32(x), f32(y)}
-}
-
-input_pressed :: proc(state: InputState, key: i32) -> bool {
-    assert(key in state.key_state)
-    return state.key_state[key] == glfw.PRESS
-}
-
-input_clicked :: proc(state: InputState, key: i32) -> bool {
-    assert(key in state.key_state)
-    assert(key in state.prev_key_state)
-    return state.key_state[key] == glfw.PRESS && state.prev_key_state[key] == glfw.RELEASE
-}
-
-input_mouse_diff :: proc(state: InputState) -> Vec2 {
-    return state.mouse_pos - state.prev_mouse_pos
-}
-
 move_player :: proc(state: ^GameState, dt: f32) {
     player := &state.instances[state.player]
     if state.grounded {
@@ -269,37 +172,26 @@ move_player :: proc(state: ^GameState, dt: f32) {
 
         state.camera.transform.rotation = linalg.matrix3_from_yaw_pitch_roll(state.yaw, state.pitch, 0)
     } else {
+        clamp_in_segment :: proc(value, center: f32, margins: [2]f32) -> f32 {
+            return clamp(value, center + margins[0], center + margins[1])
+        }
+
         katana.position.x += diff.x * KATANA_SENSITIVITY
-        katana.position.x = clamp(
-            katana.position.x,
-            KATANA_BASE_POSITION.x + KATANA_SPREAD.x[0],
-            KATANA_BASE_POSITION.x + KATANA_SPREAD.x[1],
-        )
+        katana.position.x = clamp_in_segment(katana.position.x, KATANA_BASE_POSITION.x, KATANA_SPREAD.x)
         katana.position.y -= diff.y * KATANA_SENSITIVITY
-        katana.position.y = clamp(
-            katana.position.y,
-            KATANA_BASE_POSITION.y + KATANA_SPREAD.y[0],
-            KATANA_BASE_POSITION.y + KATANA_SPREAD.y[1],
-        )
+        katana.position.y = clamp_in_segment(katana.position.y, KATANA_BASE_POSITION.y, KATANA_SPREAD.y)
+
+        interpolate_segment :: proc(pos, base_pos: f32, spread: [2]f32) -> f32 {
+            return 0.5 * clamp((pos - base_pos) / abs(spread[1]), 0, 1) \
+                 + 0.5 * clamp(1 - (base_pos - pos) / abs(spread[0]), 0, 1)
+        }
 
         xt: f32 = state.last_xt
         if linalg.length(diff) < 100 {
-            xt = 0.5 * clamp(
-                (katana.position.x - KATANA_BASE_POSITION.x) / abs(KATANA_SPREAD.x[1]),
-                0, 1,
-            ) + 0.5 * clamp(
-                1 - (KATANA_BASE_POSITION.x - katana.position.x) / abs(KATANA_SPREAD.x[0]),
-                0, 1,
-            )
+            xt = interpolate_segment(katana.position.x, KATANA_BASE_POSITION.x, KATANA_SPREAD.x)
         }
 
-        yt := 0.5 * clamp(
-            (katana.position.y - KATANA_BASE_POSITION.y) / abs(KATANA_SPREAD.y[1]),
-            0, 1,
-        ) + 0.5 * clamp(
-            1 - (KATANA_BASE_POSITION.y - katana.position.y) / abs(KATANA_SPREAD.y[0]),
-            0, 1,
-        )
+        yt := interpolate_segment(katana.position.y, KATANA_BASE_POSITION.y, KATANA_SPREAD.y)
         
         katana.rotation = linalg.matrix3_from_euler_angles_zx(
             math.lerp(KATANA_ANGLES.x[0], KATANA_ANGLES.x[1], xt),

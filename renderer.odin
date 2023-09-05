@@ -9,6 +9,10 @@ import "core:fmt"
 import "core:strings"
 import "core:math"
 
+COLOR_RED :: VEC3_X
+COLOR_GREEN :: VEC3_Y
+COLOR_BLUE :: VEC3_Z
+
 Camera :: struct {
     fov: f32,
     near: f32,
